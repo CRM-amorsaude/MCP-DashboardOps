@@ -54,7 +54,11 @@ app.post('/api/attribution', async (req, res) => {
       : '';
 
     const whereErp = erp && erp !== 'todos'
-      ? `AND erp = '${erp}'`
+      ? erp === 'medicina'
+        ? `AND erp IN ('Amei', 'Amei!')`
+        : erp === 'odontologia'
+          ? `AND erp IN ('Webdental', 'Webvidas')`
+          : ''
       : '';
 
     const sql = `
