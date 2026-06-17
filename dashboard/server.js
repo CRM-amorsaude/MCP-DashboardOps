@@ -115,6 +115,55 @@ app.post('/api/attribution', async (req, res) => {
   }
 });
 
+// ── /api/cvortex ─────────────────────────────────────────────────────────
+// Consulta cVortex Odonto (16831) e/ou Medicina (16832) via Metabase
+// Body: { startDate, endDate, bu? }  bu = 'odontologia' | 'medicina' | 'todos'
+app.post('/api/cvortex', async (req, res) => {
+  const { startDate, endDate, bu = 'todos' } = req.body;
+
+  if (!startDate || !endDate) {
+    return res.status(400).json({ error: 'startDate e endDate são obrigatórios' });
+  }
+  if (!METABASE_USER || !METABASE_PASS) {
+    return res.status(500).json({ error: 'Credenciais do Metabase não configuradas' });
+  }
+
+  const params = [
+    { type: 'category', target: ['variable', ['template-tag', 'data_inicio']], value: startDate },
+    { type: 'category', target: ['variable', ['template-tag', 'data_fim']],    value: endDate   },
+  ];
+
+  async function queryQuestion(id, buLabel) {
+    const token = await metabaseSession();
+    const res2  = await fetch(`${METABASE_URL}/api/card/${id}/query/json`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Metabase-Session': token },
+      body:    JSON.stringify({ parameters: params }),
+    });
+    if (!res2.ok) throw new Error(`Metabase question ${id} failed: ${res2.status}`);
+    const rows = await res2.json();
+    return rows.map(r => ({ ...r, bu: buLabel }));
+  }
+
+  try {
+    let rows = [];
+
+    if (bu === 'todos' || bu === 'odontologia') {
+      const odonto = await queryQuestion(16831, 'odontologia');
+      rows = rows.concat(odonto);
+    }
+    if (bu === 'todos' || bu === 'medicina') {
+      const med = await queryQuestion(16832, 'medicina');
+      rows = rows.concat(med);
+    }
+
+    res.json({ rows, total: rows.length });
+  } catch (err) {
+    console.error('/api/cvortex error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── /api/chat (Claude streaming) ─────────────────────────────────────────
 app.post('/api/chat', async (req, res) => {
   const { messages } = req.body;
