@@ -1,55 +1,56 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase.js';
-import { subDays, format } from 'date-fns';
 
-export function useEnrollments(days = 7) {
+export function useEnrollments(startDate, endDate) {
   const [data, setData]       = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(null);
 
   useEffect(() => {
+    if (!startDate || !endDate) return;
+    let cancelled = false;
     async function load() {
       setLoading(true);
       try {
-        const since = format(subDays(new Date(), days), 'yyyy-MM-dd');
         const { data: rows, error: err } = await supabase
           .from('hs_workflow_enrollments')
           .select('*')
-          .gte('date', since)
-          .order('date', { ascending: false });
+          .gte('date', startDate)
+          .lte('date', endDate)
+          .order('date', { ascending: true });
         if (err) throw err;
+        if (cancelled) return;
 
         const byFlow = {};
         for (const r of rows) {
           if (!byFlow[r.flow_id]) {
-            byFlow[r.flow_id] = { flow_id: r.flow_id, flow_name: r.flow_name, days: [] };
+            byFlow[r.flow_id] = { flow_id: r.flow_id, flow_name: r.flow_name, dailySeries: [] };
           }
-          byFlow[r.flow_id].days.push({ date: r.date, enrollments: r.enrollments });
+          byFlow[r.flow_id].dailySeries.push({ date: r.date, enrollments: r.enrollments });
         }
 
         const result = Object.values(byFlow).map(f => {
-          const sorted = f.days.sort((a, b) => b.date.localeCompare(a.date));
-          const today  = sorted[0]?.enrollments ?? 0;
-          const prev   = sorted[1]?.enrollments ?? 0;
-          const prior  = sorted.slice(1);
+          const series = f.dailySeries.sort((a, b) => a.date.localeCompare(b.date));
+          const today  = series[series.length - 1]?.enrollments ?? 0;
+          const prev   = series[series.length - 2]?.enrollments ?? 0;
+          const prior  = series.slice(0, -1);
           const avg7d  = prior.length ? prior.reduce((s, d) => s + d.enrollments, 0) / prior.length : 0;
           const drop   = avg7d > 0 ? ((today - avg7d) / avg7d) * 100 : 0;
           return {
-            ...f,
-            today, prev,
-            avg7d: Math.round(avg7d),
+            ...f, today, prev,
+            avg7d:   Math.round(avg7d),
             dropPct: Math.round(drop * 10) / 10,
-            health: drop <= -20 ? 'crit' : drop <= -10 ? 'warn' : 'ok',
-            series: sorted.slice(0, 7).reverse().map(d => d.enrollments),
+            health:  drop <= -20 ? 'crit' : drop <= -10 ? 'warn' : 'ok',
           };
         });
         result.sort((a, b) => b.today - a.today);
         setData(result);
-      } catch (e) { setError(e.message); }
-      finally { setLoading(false); }
+      } catch (e) { if (!cancelled) setError(e.message); }
+      finally     { if (!cancelled) setLoading(false); }
     }
     load();
-  }, [days]);
+    return () => { cancelled = true; };
+  }, [startDate, endDate]);
 
   return { data, loading, error };
 }
