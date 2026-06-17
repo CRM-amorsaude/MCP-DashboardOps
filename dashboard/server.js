@@ -16,8 +16,14 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(join(__dirname, 'dist')));
 
-// ── Metabase session helper ───────────────────────────────────────────────
-async function metabaseSession() {
+// ── Metabase auth header ─────────────────────────────────────────────────
+// Prefere API key (mais estável); fallback para user/pass session
+const METABASE_API_KEY = process.env.METABASE_API_KEY || '';
+
+async function metabaseHeaders() {
+  if (METABASE_API_KEY) {
+    return { 'Content-Type': 'application/json', 'X-API-Key': METABASE_API_KEY };
+  }
   const res = await fetch(`${METABASE_URL}/api/session`, {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -25,7 +31,7 @@ async function metabaseSession() {
   });
   if (!res.ok) throw new Error(`Metabase auth failed: ${res.status}`);
   const { id } = await res.json();
-  return id;
+  return { 'Content-Type': 'application/json', 'X-Metabase-Session': id };
 }
 
 // ── /api/attribution ──────────────────────────────────────────────────────
@@ -37,12 +43,12 @@ app.post('/api/attribution', async (req, res) => {
   if (!startDate || !endDate) {
     return res.status(400).json({ error: 'startDate e endDate são obrigatórios' });
   }
-  if (!METABASE_USER || !METABASE_PASS) {
-    return res.status(500).json({ error: 'Credenciais do Metabase não configuradas' });
+  if (!METABASE_API_KEY && (!METABASE_USER || !METABASE_PASS)) {
+    return res.status(500).json({ error: 'Configure METABASE_API_KEY ou METABASE_USER + METABASE_PASS' });
   }
 
   try {
-    const token = await metabaseSession();
+    const mbHeaders = await metabaseHeaders();
 
     // Lista de campanhas para filtrar (vem do flowMap via frontend)
     const campaignList = (emails || [])
@@ -89,10 +95,7 @@ app.post('/api/attribution', async (req, res) => {
 
     const queryRes = await fetch(`${METABASE_URL}/api/dataset`, {
       method:  'POST',
-      headers: {
-        'Content-Type':       'application/json',
-        'X-Metabase-Session': token,
-      },
+      headers: mbHeaders,
       body: JSON.stringify({
         database: 68,
         type:     'native',
@@ -128,8 +131,8 @@ app.post('/api/cvortex', async (req, res) => {
   if (!startDate || !endDate) {
     return res.status(400).json({ error: 'startDate e endDate são obrigatórios' });
   }
-  if (!METABASE_USER || !METABASE_PASS) {
-    return res.status(500).json({ error: 'Credenciais do Metabase não configuradas' });
+  if (!METABASE_API_KEY && (!METABASE_USER || !METABASE_PASS)) {
+    return res.status(500).json({ error: 'Configure METABASE_API_KEY ou METABASE_USER + METABASE_PASS' });
   }
 
   const params = [
@@ -138,10 +141,10 @@ app.post('/api/cvortex', async (req, res) => {
   ];
 
   async function queryQuestion(id, buLabel) {
-    const token = await metabaseSession();
+    const headers = await metabaseHeaders();
     const res2  = await fetch(`${METABASE_URL}/api/card/${id}/query/json`, {
       method:  'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Metabase-Session': token },
+      headers,
       body:    JSON.stringify({ parameters: params }),
     });
     if (!res2.ok) throw new Error(`Metabase question ${id} failed: ${res2.status}`);
