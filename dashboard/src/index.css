@@ -1,0 +1,183 @@
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Nexa — fonte oficial AmorSaúde ─────────────────────── */
+@font-face {
+  font-family: 'Nexa Black';
+  src: url('/fonts/Nexa_Black_Regular.ttf') format('truetype');
+  font-weight: 700 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Nexa Light';
+  src: url('/fonts/Nexa-ExtraLight.ttf') format('truetype');
+  font-weight: 300 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  /* ── Paleta oficial ──────────────────────────────────── */
+  --as-azul-apatita:     #61C1D0;
+  --as-azul-apatita-50:  #ECF8FA;
+  --as-azul-apatita-100: #D4F0F3;
+  --as-azul-apatita-200: #AFE3EA;
+  --as-azul-apatita-500: #44A9B8;
+  --as-azul-apatita-600: #348795;
+  --as-azul-apatita-700: #266773;
+  --as-azul-apatita-800: #1A4A53;
+
+  --as-vermelho:         #D73834;
+  --as-vermelho-50:      #FDECEA;
+  --as-vermelho-100:     #FAD3D1;
+  --as-vermelho-500:     #BD2A26;
+  --as-vermelho-600:     #A32D2D;
+
+  --as-azul-escuro:      #0C223C;
+  --as-azul-escuro-50:   #E8ECF1;
+  --as-azul-escuro-100:  #C3CCD9;
+  --as-azul-escuro-200:  #8B9CB3;
+
+  --as-branco:           #FFFFFF;
+  --as-gelo:             #F7FAFB;
+  --as-cinza-50:         #F2F5F7;
+  --as-cinza-100:        #E5EAEE;
+  --as-cinza-200:        #CCD4DC;
+  --as-cinza-300:        #A8B3BF;
+  --as-cinza-400:        #7C8896;
+  --as-cinza-500:        #5A6675;
+  --as-cinza-600:        #404B59;
+
+  /* ── Semânticas ──────────────────────────────────────── */
+  --as-success:      #1E9E7A;
+  --as-success-soft: #E1F5EE;
+  --as-success-ink:  #085041;
+  --as-warning:      #E8A33A;
+  --as-warning-soft: #FCEFD4;
+  --as-warning-ink:  #6A4310;
+
+  /* ── Roles ───────────────────────────────────────────── */
+  --color-bg-primary:   var(--as-branco);
+  --color-bg-secondary: var(--as-gelo);
+  --color-bg-tertiary:  var(--as-cinza-50);
+  --color-text-primary:   var(--as-azul-escuro);
+  --color-text-secondary: var(--as-cinza-600);
+  --color-text-tertiary:  var(--as-cinza-400);
+  --color-border:         rgba(12,34,60,.1);
+  --color-border-mid:     var(--as-cinza-200);
+
+  /* ── Tipografia ──────────────────────────────────────── */
+  --font-display: 'Nexa Black', 'Nunito', system-ui, sans-serif;
+  --font-sans:    'Nexa Light', 'Nunito', system-ui, sans-serif;
+  --font-mono:    'JetBrains Mono', ui-monospace, monospace;
+
+  /* ── Radii (brand: soft/rounded) ────────────────────── */
+  --radius-sm:   6px;
+  --radius-md:   10px;
+  --radius-lg:   14px;
+  --radius-xl:   20px;
+  --radius-pill: 999px;
+
+  /* ── Sombras navy-tinted ─────────────────────────────── */
+  --shadow-xs: 0 1px 2px rgba(12,34,60,.04);
+  --shadow-sm: 0 1px 3px rgba(12,34,60,.06), 0 1px 2px rgba(12,34,60,.04);
+  --shadow-md: 0 4px 12px rgba(12,34,60,.08), 0 2px 4px rgba(12,34,60,.04);
+}
+
+/* ── Base ──────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-primary);
+  background: var(--as-gelo);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* ── Scrollbar ─────────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--as-cinza-200); border-radius: 3px; }
+
+/* ── Tabelas ───────────────────────────────────────────── */
+table { border-collapse: collapse; width: 100%; }
+th {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-text-tertiary);
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  white-space: nowrap;
+}
+td {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-primary);
+}
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: var(--as-azul-apatita-50); }
+
+/* ── Pills ─────────────────────────────────────────────── */
+.pill {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 9px;
+  border-radius: var(--radius-pill);
+}
+.pill-ok   { background: var(--as-success-soft); color: var(--as-success-ink); }
+.pill-warn { background: var(--as-warning-soft); color: var(--as-warning-ink); }
+.pill-crit { background: var(--as-vermelho-50);  color: var(--as-vermelho-600); }
+.pill-teal { background: var(--as-azul-apatita-50);  color: var(--as-azul-apatita-700); }
+.pill-navy { background: var(--as-azul-escuro-50);   color: var(--as-azul-escuro); }
+
+/* ── Rate bar ──────────────────────────────────────────── */
+.rate-track {
+  height: 4px;
+  background: var(--as-cinza-100);
+  border-radius: 2px;
+  overflow: hidden;
+  flex: 1;
+}
+.rate-fill { height: 100%; border-radius: 2px; }
+
+/* ── Chat bubbles ──────────────────────────────────────── */
+.chat-user {
+  background: var(--as-azul-escuro);
+  color: white;
+  border-radius: 16px 16px 4px 16px;
+  padding: 10px 14px;
+  max-width: 80%;
+  align-self: flex-end;
+  box-shadow: var(--shadow-sm);
+}
+.chat-agent {
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: 16px 16px 16px 4px;
+  padding: 10px 14px;
+  max-width: 85%;
+  align-self: flex-start;
+  box-shadow: var(--shadow-sm);
+}
+
+/* ── Animações ─────────────────────────────────────────── */
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+.pulse { animation: pulse 2s infinite; }
+
+@keyframes fadeIn { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:none} }
+.fade-in { animation: fadeIn 200ms cubic-bezier(.4,0,.2,1); }
+
+::selection { background: var(--as-azul-apatita-200); color: var(--as-azul-escuro); }
