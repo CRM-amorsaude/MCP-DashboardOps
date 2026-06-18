@@ -1,11 +1,13 @@
-// Helpers para agregação de dados de atribuição HubSpot
-// Fonte: fl_cruzamento_campanhas_hubspot via Metabase /api/attribution
+// Helpers de atribuição HubSpot
+// Fonte: campaign_attribution_detail (Supabase) ← fl_cruzamento_campanhas_hubspot
 
-export const MED_ERPS     = ['Amei', 'Amei!'];
-export const ODO_ERPS     = ['Webdental', 'Webvidas'];
-export const ODO_ORIGINS  = ['Odontologia', 'DentalVidas'];
-export const POS_ORIGINS  = ['Pós Consulta', 'Proposta Manual', 'Proposta Automática'];
-export const PAID_STATUS  = ['Quitadas', 'Efetivado'];
+export const MED_ERPS          = ['Amei', 'Amei!'];
+export const ODO_ERPS          = ['Webdental', 'Webvidas'];
+export const ODO_ORIGINS       = ['Odontologia', 'DentalVidas'];
+export const POS_ORIGINS       = ['Pós Consulta', 'Proposta Manual', 'Proposta Automática'];
+export const PAID_POS_STATUS   = ['Quitadas', 'Executada', 'Parcialmente quitada'];
+export const PAID_ATEND_STATUS = ['Quitadas', 'Parcialmente quitada'];
+export const PAID_STATUS       = ['Quitadas', 'Efetivado'];
 
 export const isMed  = r => MED_ERPS.includes(r.erp);
 export const isOdo  = r => ODO_ERPS.includes(r.erp) || ODO_ORIGINS.includes(r.origem_descricao);
@@ -19,25 +21,55 @@ export function filterBU(rows, bu) {
 }
 
 export function calcMetrics(rows) {
-  const n = (v) => Number(v) || 0;
-  const agendamentos    = rows.filter(r => r.origem_descricao === 'Agendamento')
+  const n = v => Number(v) || 0;
+
+  // Agendamentos: origem IN ('Agendamento', 'Atendimento') — todos os status
+  const agendamentos = rows
+    .filter(r => ['Agendamento', 'Atendimento'].includes(r.origem_descricao))
     .reduce((s, r) => s + n(r.conversoes), 0);
-  const atendimentos    = rows.filter(r => POS_ORIGINS.includes(r.origem_descricao) && isMed(r))
+
+  // Atendimentos: origem = 'Atendimento' — todos os status
+  const atendimentos = rows
+    .filter(r => r.origem_descricao === 'Atendimento')
     .reduce((s, r) => s + n(r.conversoes), 0);
-  const valor_atend     = rows.filter(r => r.origem_descricao === 'Agendamento' && r.nm_status === 'Quitadas')
+
+  // Valor atendimento: origem = 'Agendamento' AND status pago
+  const valor_atend = rows
+    .filter(r => r.origem_descricao === 'Agendamento' && PAID_ATEND_STATUS.includes(r.nm_status))
     .reduce((s, r) => s + n(r.receita_atribuida), 0);
-  const qt_exames       = rows.filter(r => r.nm_status === 'Quitadas')
+
+  // Qt Propostas: origem IN POS_ORIGINS AND medicina — todos os status
+  const qt_propostas = rows
+    .filter(r => POS_ORIGINS.includes(r.origem_descricao) && isMed(r))
     .reduce((s, r) => s + n(r.conversoes), 0);
-  const fat_pos         = rows.filter(r => POS_ORIGINS.includes(r.origem_descricao) && isMed(r) && isPaid(r))
-    .reduce((s, r) => s + n(r.receita_atribuida), 0);
-  const fat_odo         = rows.filter(r => isOdo(r) && isPaid(r))
-    .reduce((s, r) => s + n(r.receita_atribuida), 0);
-  const fat_total       = rows.filter(r => isPaid(r))
-    .reduce((s, r) => s + n(r.receita_atribuida), 0);
-  const propostas_pagas = rows.filter(r => isPaid(r))
+
+  // Qt Propostas Pagas: POS_ORIGINS + medicina + status pago
+  const qt_propostas_pagas = rows
+    .filter(r => POS_ORIGINS.includes(r.origem_descricao) && isMed(r) && PAID_POS_STATUS.includes(r.nm_status))
     .reduce((s, r) => s + n(r.conversoes), 0);
+
+  // Fat. Pós: POS_ORIGINS + medicina + status pago → receita
+  const fat_pos = rows
+    .filter(r => POS_ORIGINS.includes(r.origem_descricao) && isMed(r) && PAID_POS_STATUS.includes(r.nm_status))
+    .reduce((s, r) => s + n(r.receita_atribuida), 0);
+
+  // Fat. Odonto: origem IN ('Odontologia', 'DentalVidas') AND status = 'Efetivado'
+  const fat_odo = rows
+    .filter(r => ODO_ORIGINS.includes(r.origem_descricao) && r.nm_status === 'Efetivado')
+    .reduce((s, r) => s + n(r.receita_atribuida), 0);
+
+  // Fat. Total: valor_atend + fat_pos + fat_odo
+  const fat_total = valor_atend + fat_pos + fat_odo;
+
+  const propostas_pagas = qt_propostas_pagas;
   const ticket_medio    = propostas_pagas > 0 ? fat_total / propostas_pagas : 0;
-  return { agendamentos, atendimentos, valor_atend, qt_exames, fat_pos, fat_odo, fat_total, propostas_pagas, ticket_medio };
+
+  return {
+    agendamentos, atendimentos, valor_atend,
+    qt_propostas, qt_propostas_pagas,
+    fat_pos, fat_odo, fat_total,
+    propostas_pagas, ticket_medio,
+  };
 }
 
 export function calcCanais(rows) {
@@ -66,30 +98,28 @@ export function calcTopCampanhas(rows, n = 10) {
   for (const r of rows) {
     if (!map[r.nm_campanha]) map[r.nm_campanha] = { nm_campanha: r.nm_campanha, conversoes: 0, receita: 0 };
     map[r.nm_campanha].conversoes += Number(r.conversoes) || 0;
-    if (isPaid(r)) map[r.nm_campanha].receita += Number(r.receita_atribuida) || 0;
+    const m = calcMetrics([r]);
+    map[r.nm_campanha].receita += m.fat_total;
   }
   return Object.values(map).sort((a, b) => b.receita - a.receita).slice(0, n);
 }
 
-// Agrega métricas por email individual a partir dos rows brutos
 export function calcPerEmail(rows, emailName) {
   const r = rows.filter(x => x.nm_campanha === emailName);
   return { nm_campanha: emailName, ...calcMetrics(r), canais: calcCanais(r) };
 }
 
-// Agrega faturamento por origem e mês para o gráfico de linha
 export function calcFatByMonth(rows) {
   const map = {};
   for (const r of rows) {
-    if (!isPaid(r)) continue;
-    const date = r.data_referencia || '';
-    const month = date.substring(0, 7); // YYYY-MM
+    const date  = r.data_referencia || '';
+    const month = date.substring(0, 7);
     if (!month) continue;
     if (!map[month]) map[month] = { month, pos: 0, odo: 0, atend: 0 };
     const val = Number(r.receita_atribuida) || 0;
-    if (POS_ORIGINS.includes(r.origem_descricao) && isMed(r)) map[month].pos += val;
-    if (isOdo(r)) map[month].odo += val;
-    if (r.origem_descricao === 'Agendamento') map[month].atend += val;
+    if (POS_ORIGINS.includes(r.origem_descricao) && isMed(r) && PAID_POS_STATUS.includes(r.nm_status)) map[month].pos += val;
+    if (ODO_ORIGINS.includes(r.origem_descricao) && r.nm_status === 'Efetivado') map[month].odo += val;
+    if (r.origem_descricao === 'Agendamento' && PAID_ATEND_STATUS.includes(r.nm_status)) map[month].atend += val;
   }
   return Object.values(map).sort((a, b) => a.month.localeCompare(b.month));
 }

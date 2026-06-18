@@ -133,7 +133,8 @@ function EmailTable({ emails, emailMetrics, attrRows }) {
     agendamentos: rows.reduce((s,r)=>s+(r.agendamentos||0),0),
     atendimentos: rows.reduce((s,r)=>s+(r.atendimentos||0),0),
     valor_atend: rows.reduce((s,r)=>s+(r.valor_atend||0),0),
-    qt_exames: rows.reduce((s,r)=>s+(r.qt_exames||0),0),
+    qt_propostas: rows.reduce((s,r)=>s+(r.qt_propostas||0),0),
+    qt_propostas_pagas: rows.reduce((s,r)=>s+(r.qt_propostas_pagas||0),0),
     fat_pos: rows.reduce((s,r)=>s+(r.fat_pos||0),0),
     fat_odo: rows.reduce((s,r)=>s+(r.fat_odo||0),0),
     fat_total: rows.reduce((s,r)=>s+(r.fat_total||0),0),
@@ -349,7 +350,8 @@ function OverviewTab({ rows, loading }) {
       <div style={{ display:'grid', gridTemplateColumns:'repeat(4,minmax(0,1fr))', gap:12, marginBottom:20 }}>
         <MetricCard label="Fat. Pós Consulta"  value={fmtBRL(m.fat_pos)} sub="medicina paga" />
         <MetricCard label="Fat. Odontologia"   value={fmtBRL(m.fat_odo)} sub="Webdental + Webvidas" />
-        <MetricCard label="Qt. Exames"         value={fmtK(m.qt_exames)} sub="conversões quitadas" />
+        <MetricCard label="Qt. Propostas"      value={fmtK(m.qt_propostas)} sub="todas origens pós" />
+        <MetricCard label="Qt. Prop. Pagas"    value={fmtK(m.qt_propostas_pagas)} sub="Quitadas + Executada" />
         <MetricCard label="Valor atendimento"  value={fmtBRL(m.valor_atend)} sub="agendamento quitado" />
       </div>
 
