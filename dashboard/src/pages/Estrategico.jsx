@@ -146,12 +146,12 @@ function EmailTable({ emails, emailMetrics, attrRows }) {
   const dash = v => v > 0 ? fmtBRL(v) : '—';
   return (
     <div style={{ overflowX:'auto', borderRadius:'var(--radius-lg)', border:'1px solid var(--color-border)' }}>
-      <table style={{ tableLayout:'fixed', minWidth:860 }}>
+      <table style={{ tableLayout:'fixed', minWidth:1020 }}>
         <colgroup>
-          <col style={{ width:'22%' }}/><col style={{ width:'8%' }}/><col style={{ width:'8%' }}/>
-          <col style={{ width:'9%' }}/><col style={{ width:'9%' }}/><col style={{ width:'10%' }}/>
-          <col style={{ width:'7%' }}/><col style={{ width:'8%' }}/><col style={{ width:'9%' }}/><col style={{ width:'7%' }}/><col style={{ width:'7%' }}/>
-        </colgroup>
+            <col style={{ width:'18%' }}/><col style={{ width:'7%' }}/><col style={{ width:'7%' }}/>
+            <col style={{ width:'8%' }}/><col style={{ width:'7%' }}/><col style={{ width:'9%' }}/>
+            <col style={{ width:'7%' }}/><col style={{ width:'7%' }}/><col style={{ width:'8%' }}/><col style={{ width:'8%' }}/><col style={{ width:'8%' }}/>
+          </colgroup>
         <thead>
           <tr>
             <TH>E-mail</TH>

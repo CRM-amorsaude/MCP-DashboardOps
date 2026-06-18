@@ -73,8 +73,10 @@ export function calcMetrics(rows) {
 }
 
 export function calcCanais(rows) {
+  // Considera apenas origem = Agendamento ou Atendimento
+  const agRows = rows.filter(r => ['Agendamento', 'Atendimento'].includes(r.origem_descricao));
   const map = {};
-  for (const r of rows) {
+  for (const r of agRows) {
     const canal = r.nm_canal || 'Desconhecido';
     map[canal] = (map[canal] || 0) + (Number(r.conversoes) || 0);
   }
