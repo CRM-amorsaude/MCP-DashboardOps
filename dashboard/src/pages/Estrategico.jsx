@@ -150,7 +150,7 @@ function EmailTable({ emails, emailMetrics, attrRows }) {
         <colgroup>
           <col style={{ width:'22%' }}/><col style={{ width:'8%' }}/><col style={{ width:'8%' }}/>
           <col style={{ width:'9%' }}/><col style={{ width:'9%' }}/><col style={{ width:'10%' }}/>
-          <col style={{ width:'8%' }}/><col style={{ width:'10%' }}/><col style={{ width:'8%' }}/><col style={{ width:'8%' }}/>
+          <col style={{ width:'7%' }}/><col style={{ width:'8%' }}/><col style={{ width:'9%' }}/><col style={{ width:'7%' }}/><col style={{ width:'7%' }}/>
         </colgroup>
         <thead>
           <tr>
@@ -160,7 +160,8 @@ function EmailTable({ emails, emailMetrics, attrRows }) {
             <TH right>Agendamentos</TH>
             <TH right>Atendimentos</TH>
             <TH right red>Valor atend.</TH>
-            <TH right>Qt exames</TH>
+            <TH right>Qt Propostas</TH>
+            <TH right>Qt Prop. Pagas</TH>
             <TH right red>Fat. Pós</TH>
             <TH right red>Fat. Odonto</TH>
             <TH right red>Fat. Total</TH>
@@ -175,7 +176,8 @@ function EmailTable({ emails, emailMetrics, attrRows }) {
               <td style={td(r.agendamentos||0)}>{fmtK(r.agendamentos||0)}</td>
               <td style={td(r.atendimentos||0)}>{fmtK(r.atendimentos||0)}</td>
               <td style={td(r.valor_atend||0, true)}>{dash(r.valor_atend||0)}</td>
-              <td style={td(r.qt_exames||0)}>{fmtK(r.qt_exames||0)}</td>
+              <td style={td(r.qt_propostas||0)}>{fmtK(r.qt_propostas||0)}</td>
+              <td style={td(r.qt_propostas_pagas||0)}>{fmtK(r.qt_propostas_pagas||0)}</td>
               <td style={td(r.fat_pos||0, true)}>{dash(r.fat_pos||0)}</td>
               <td style={td(r.fat_odo||0, true)}>{dash(r.fat_odo||0)}</td>
               <td style={td(r.fat_total||0, true)}>{dash(r.fat_total||0)}</td>
@@ -188,7 +190,8 @@ function EmailTable({ emails, emailMetrics, attrRows }) {
             <td style={{ ...td(tot.agendamentos), borderTop:'1px solid var(--color-border)' }}>{fmtK(tot.agendamentos)}</td>
             <td style={{ ...td(tot.atendimentos), borderTop:'1px solid var(--color-border)' }}>{fmtK(tot.atendimentos)}</td>
             <td style={{ ...td(tot.valor_atend, true), borderTop:'1px solid var(--color-border)' }}>{dash(tot.valor_atend)}</td>
-            <td style={{ ...td(tot.qt_exames), borderTop:'1px solid var(--color-border)' }}>{fmtK(tot.qt_exames)}</td>
+            <td style={{ ...td(tot.qt_propostas), borderTop:'1px solid var(--color-border)' }}>{fmtK(tot.qt_propostas)}</td>
+            <td style={{ ...td(tot.qt_propostas_pagas), borderTop:'1px solid var(--color-border)' }}>{fmtK(tot.qt_propostas_pagas)}</td>
             <td style={{ ...td(tot.fat_pos, true), borderTop:'1px solid var(--color-border)' }}>{dash(tot.fat_pos)}</td>
             <td style={{ ...td(tot.fat_odo, true), borderTop:'1px solid var(--color-border)' }}>{dash(tot.fat_odo)}</td>
             <td style={{ ...td(tot.fat_total, true), borderTop:'1px solid var(--color-border)' }}>{dash(tot.fat_total)}</td>
