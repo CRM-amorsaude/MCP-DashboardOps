@@ -316,11 +316,21 @@ function FlowCard({ flow, attrRows, emailMetrics, enrollments }) {
 
 // ── Overview tab ──────────────────────────────────────────────────────────
 function OverviewTab({ rows, loading }) {
-  const m     = useMemo(() => calcMetrics(rows), [rows]);
-  const esps  = useMemo(() => calcEspecialidades(rows).slice(0, 10), [rows]);
-  const top   = useMemo(() => calcTopCampanhas(rows, 8), [rows]);
-  const canais= useMemo(() => calcCanais(rows), [rows]);
-  const fatM  = useMemo(() => calcFatByMonth(rows), [rows]);
+  const m        = useMemo(() => calcMetrics(rows), [rows]);
+  const esps     = useMemo(() => calcEspecialidades(rows).slice(0, 10), [rows]);
+  const top      = useMemo(() => calcTopCampanhas(rows, 8), [rows]);
+  const canais   = useMemo(() => calcCanais(rows), [rows]);
+  const fatM     = useMemo(() => calcFatByMonth(rows), [rows]);
+  const convenios = useMemo(() => {
+    const map = {};
+    for (const r of rows) {
+      const conv = r.nm_convenio || 'Outros';
+      map[conv] = (map[conv]||0) + (Number(r.conversoes)||0);
+    }
+    const total = Object.values(map).reduce((s,v)=>s+v,0);
+    return Object.entries(map).sort((a,b)=>b[1]-a[1]).slice(0,4)
+      .map(([l,v])=>({ label:l, count:v, pct:total>0?Math.round(v/total*100):0 }));
+  }, [rows]);
 
   const txAg  = m.fat_total > 0 && m.agendamentos > 0 ? ((m.agendamentos / (m.propostas_pagas||1)) * 100).toFixed(1) : '—';
 
@@ -423,16 +433,7 @@ function OverviewTab({ rows, loading }) {
 
           <div style={{ marginTop:16 }}>
             <div style={{ fontSize:11, fontWeight:700, color:'var(--color-text-tertiary)', textTransform:'uppercase', letterSpacing:'.07em', marginBottom:8 }}>Convênios</div>
-            <CanalBars canais={useMemo(() => {
-              const map = {};
-              for (const r of rows) {
-                const conv = r.nm_convenio || 'Outros';
-                map[conv] = (map[conv]||0) + (Number(r.conversoes)||0);
-              }
-              const total = Object.values(map).reduce((s,v)=>s+v,0);
-              return Object.entries(map).sort((a,b)=>b[1]-a[1]).slice(0,4)
-                .map(([l,v])=>({ label:l, count:v, pct:total>0?Math.round(v/total*100):0 }));
-            }, [rows])} />
+            <CanalBars canais={convenios} />
           </div>
         </div>
       </div>

@@ -19,6 +19,7 @@ export function useCvortex(startDate, endDate, bu = 'todos') {
           .gte('data_referencia', startDate)
           .lte('data_referencia', endDate);
         if (bu !== 'todos') query = query.eq('bu', bu);
+        query = query.limit(10000);
         const { data, error: err } = await query;
         if (err) throw err;
         if (!cancelled) setRows(data || []);
