@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase.js';
 
 export function useCvortex(startDate, endDate, bu = 'todos') {
   const [rows, setRows]       = useState([]);
@@ -12,14 +13,15 @@ export function useCvortex(startDate, endDate, bu = 'todos') {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch('/api/cvortex', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ startDate, endDate, bu }),
-        });
-        if (!res.ok) throw new Error(`API ${res.status}`);
-        const json = await res.json();
-        if (!cancelled) setRows(json.rows || []);
+        let query = supabase
+          .from('cvortex_pos_consulta')
+          .select('*')
+          .gte('data_referencia', startDate)
+          .lte('data_referencia', endDate);
+        if (bu !== 'todos') query = query.eq('bu', bu);
+        const { data, error: err } = await query;
+        if (err) throw err;
+        if (!cancelled) setRows(data || []);
       } catch (e) {
         if (!cancelled) setError(e.message);
       } finally {

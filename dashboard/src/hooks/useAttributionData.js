@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { FLOW_MAP } from '../lib/flowMap.js';
+import { supabase } from '../lib/supabase.js';
 
 export function useAttributionData(startDate, endDate) {
   const [rows, setRows]       = useState([]);
@@ -13,15 +13,13 @@ export function useAttributionData(startDate, endDate) {
       setLoading(true);
       setError(null);
       try {
-        const allEmails = [...new Set(FLOW_MAP.flatMap(f => f.emails))];
-        const res = await fetch('/api/attribution', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ startDate, endDate, emails: allEmails }),
-        });
-        if (!res.ok) throw new Error(`API ${res.status}`);
-        const json = await res.json();
-        if (!cancelled) setRows(json.rows || []);
+        const { data, error: err } = await supabase
+          .from('campaign_attribution_detail')
+          .select('*')
+          .gte('data_referencia', startDate)
+          .lte('data_referencia', endDate);
+        if (err) throw err;
+        if (!cancelled) setRows(data || []);
       } catch (e) {
         if (!cancelled) setError(e.message);
       } finally {
