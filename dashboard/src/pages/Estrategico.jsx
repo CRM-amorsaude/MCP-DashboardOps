@@ -26,7 +26,7 @@ const canalColor = l => CANAL_COLORS[l] || '#A8B3BF';
 
 // ── DateRangePicker ───────────────────────────────────────────────────────
 function DateRangePicker({ startDate, endDate, quickDays, onChange }) {
-  const Q = [{ v:7,l:'7d' },{ v:30,l:'30d' },{ v:90,l:'90d' }];
+  const Q = [{ v:7,l:'7d' },{ v:30,l:'30d' },{ v:45,l:'45d' },{ v:90,l:'90d' }];
   const btn = on => ({
     fontSize:12, fontWeight:on?700:400, fontFamily:'var(--font-sans)',
     padding:'4px 12px', borderRadius:'var(--radius-md)',
@@ -576,7 +576,7 @@ function WhatsAppTab({ rows, loading }) {
 
 // ── Estrategico (página) ──────────────────────────────────────────────────
 export default function Estrategico() {
-  const [range, setRange] = useState({ startDate:daysAgoStr(30), endDate:todayStr(), quickDays:30 });
+  const [range, setRange] = useState({ startDate:daysAgoStr(45), endDate:todayStr(), quickDays:45 });
   const [bu, setBU]       = useState('todos');
   const [tab, setTab]     = useState('overview');
 
