@@ -1,6 +1,9 @@
 // Mapeamento fluxo HubSpot → e-mails → nm_campanha (Athena)
 // Chave de junção para o funil estratégico
-// Atualizar quando novos fluxos/e-mails forem adicionados ao escopo
+//
+// emails[]        → nomes no HubSpot (hs_email_metrics.hs_name)
+// athenaCampaigns → nomes no Athena (campaign_attribution_detail.nm_campanha)
+//                   Se ausente, usa emails[] como fallback
 
 export const FLOW_MAP = [
   {
@@ -111,6 +114,17 @@ export const FLOW_MAP = [
       'AS | 2025 - Pós Consulta 03 - A',
       'AS | 2025 - Pós Consulta 04 - A',
     ],
+    // Versões CTAs Exames existem no Athena com nome diferente
+    athenaCampaigns: [
+      'AS | 2025 - Pós Consulta 01 - A',
+      'AS | 2025 - Pós Consulta 02 - A',
+      'AS | 2025 - Pós Consulta 03 - A',
+      'AS | 2025 - Pós Consulta 04 - A',
+      'AS | 2026 - Pós Consulta 01 - CTAs Exames',
+      'AS | 2026 - Pós Consulta 02 - CTAs Exames',
+      'AS | 2026 - Pós Consulta 03 - CTAs Exames',
+      'AS | 2026 - Pós Consulta 04 - CTAs Exames',
+    ],
   },
   {
     flowId:   '1658736508',
@@ -122,6 +136,7 @@ export const FLOW_MAP = [
     ],
   },
   {
+    // Nomes HubSpot ≠ nomes Athena — emailNameMap faz a ponte
     flowId:   '1618894127',
     flowName: 'Med - Fluxo Não Compareceu + Pesquisa NPS',
     bu:       'Medicina',
@@ -132,6 +147,20 @@ export const FLOW_MAP = [
       'AS | 2024 - No Show - Não Respondeu - Nacional - AMEI',
       'AS | 2024 - Não comparecimento - Agende sua consulta - Não Respondeu 2 - AMEI',
     ],
+    athenaCampaigns: [
+      'AS | Pesquisa Não Compareceu - AMEI',
+      'AS | No show - Motivo 1,2,4 e 5 - AMEI',
+      'AS | No show - Motivo 3 - AMEI',
+      'AS | 2024 - No Show - Não Respondeu - Nacional',
+      'AS | No show - Não respondeu 2 - AMEI',
+    ],
+    // Mapa HubSpot → Athena por e-mail individual
+    emailNameMap: {
+      'AS | Motivo 1;2;4;5 - No Show - Remarque sua consulta - Nacional - AMEI': 'AS | No show - Motivo 1,2,4 e 5 - AMEI',
+      'AS | Motivo 3 - No Show - Agende sua consulta Nacional - AMEI':            'AS | No show - Motivo 3 - AMEI',
+      'AS | 2024 - No Show - Não Respondeu - Nacional - AMEI':                    'AS | 2024 - No Show - Não Respondeu - Nacional',
+      'AS | 2024 - Não comparecimento - Agende sua consulta - Não Respondeu 2 - AMEI': 'AS | No show - Não respondeu 2 - AMEI',
+    },
   },
   {
     flowId:   '1787370568',
@@ -151,6 +180,11 @@ export const FLOW_MAP = [
     emails: [
       'AS | Telemedicina - junho 2026 (CDT)',
       'AS | Telemedicina - abril 2026 (CDT)',
+    ],
+    athenaCampaigns: [
+      'AS | Telemedicina - junho 2026 (CDT)',
+      'AS | Telemedicina - abril 2026 (CDT)',
+      'AS | Telemedicina - maio 2026 (CDT)',
     ],
   },
   {
@@ -217,22 +251,28 @@ export const FLOW_MAP = [
   },
 ];
 
-// Retorna todos os nm_campanha de um flowId específico
-export function getEmailsByFlow(flowId) {
-  const flow = FLOW_MAP.find(f => f.flowId === flowId);
-  return flow ? flow.emails : [];
+// ── Helpers ───────────────────────────────────────────────────────────────
+
+// Retorna nomes Athena do fluxo (athenaCampaigns ?? emails)
+export function getAthenaCampaigns(flow) {
+  return flow.athenaCampaigns || flow.emails;
 }
 
-// Retorna todos os nm_campanha de uma lista de flowIds
-export function getEmailsByFlows(flowIds) {
-  if (!flowIds || !flowIds.length) {
-    return FLOW_MAP.flatMap(f => f.emails);
+// Retorna nome Athena de um e-mail específico do fluxo
+// Se não houver mapa, retorna o próprio nome
+export function getAthenaName(flow, hubspotName) {
+  if (flow.emailNameMap && flow.emailNameMap[hubspotName]) {
+    return flow.emailNameMap[hubspotName];
   }
-  const set = new Set(flowIds);
-  return [...new Set(FLOW_MAP.filter(f => set.has(f.flowId)).flatMap(f => f.emails))];
+  return hubspotName;
 }
 
-// Retorna fluxos filtrados por BU
+// Todos os nomes Athena para a query 16501
+export function getAllAthenaCampaigns() {
+  return [...new Set(FLOW_MAP.flatMap(f => getAthenaCampaigns(f)))];
+}
+
+// Filtra por BU
 export function getFlowsByBU(bu) {
   if (!bu || bu === 'todos') return FLOW_MAP;
   return FLOW_MAP.filter(f => f.bu === bu || f.bu === 'Ambos');

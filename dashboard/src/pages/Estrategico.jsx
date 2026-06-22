@@ -6,7 +6,7 @@ import {
 } from 'recharts';
 import MetricCard from '../components/MetricCard.jsx';
 import { Section, TableCard, Loading, fmtK, fmtBRL } from '../components/UI.jsx';
-import { FLOW_MAP } from '../lib/flowMap.js';
+import { FLOW_MAP, getAthenaCampaigns, getAthenaName, getAllAthenaCampaigns } from '../lib/flowMap.js';
 import { useAttributionData } from '../hooks/useAttributionData.js';
 import { useCvortex } from '../hooks/useCvortex.js';
 import { useEnrollments } from '../hooks/useEnrollments.js';
@@ -116,7 +116,7 @@ function Funil({ inscricoes, enviados, abertos, agendamentos, atendimentos, prop
 }
 
 // ── Tabela e-mails individuais ─────────────────────────────────────────────
-function EmailTable({ emails, emailMetrics, attrRows }) {
+function EmailTable({ emails, flow, emailMetrics, attrRows }) {
   const TH = ({ children, red, right }) => (
     <th style={{ textAlign:right?'right':'left', color:red?'var(--as-vermelho)':'var(--color-text-tertiary)' }}>
       {children}
@@ -124,7 +124,8 @@ function EmailTable({ emails, emailMetrics, attrRows }) {
   );
   const rows = emails.map(nm => {
     const em = emailMetrics.find(e => e.hs_name === nm) || {};
-    const m  = calcPerEmail(attrRows, nm);
+    const athenaName = flow ? getAthenaName(flow, nm) : nm;
+    const m  = calcPerEmail(attrRows, athenaName);
     return { nm, ...em, ...m };
   });
   const tot = {
@@ -227,9 +228,10 @@ function FlowCard({ flow, attrRows, emailMetrics, enrollments }) {
 
   const flowRows   = useMemo(() => {
     const clean = s => (s || '').trim();
-    const emailSet = new Set(flow.emails.map(e => clean(e)));
+    const athenaCampaigns = getAthenaCampaigns(flow);
+    const emailSet = new Set(athenaCampaigns.map(e => clean(e)));
     return attrRows.filter(r => emailSet.has(clean(r.nm_campanha)));
-  }, [attrRows, flow.emails]);
+  }, [attrRows, flow]);
   const m          = useMemo(() => calcMetrics(flowRows), [flowRows]);
   const canais     = useMemo(() => calcCanais(flowRows), [flowRows]);
   const enrollment = enrollments.find(e => e.flow_id === flow.flowId);
@@ -305,7 +307,7 @@ function FlowCard({ flow, attrRows, emailMetrics, enrollments }) {
             <div style={{ fontSize:11, fontWeight:700, color:'var(--color-text-tertiary)', textTransform:'uppercase', letterSpacing:'.07em', marginBottom:8, paddingBottom:5, borderBottom:'1px solid var(--color-border)' }}>
               E-mails individuais
             </div>
-            <EmailTable emails={flow.emails} emailMetrics={emailMetrics} attrRows={attrRows} />
+            <EmailTable emails={flow.emails} flow={flow} emailMetrics={emailMetrics} attrRows={attrRows} />
           </div>
 
           {canais.length > 0 && (
@@ -453,7 +455,7 @@ function OverviewTab({ rows, loading }) {
 // ── EmailsTab ─────────────────────────────────────────────────────────────
 function EmailsTab({ attrRows, emailMetrics, enrollments, loading }) {
   // Campanhas sazonais = emails que aparecem nos attrRows mas não estão em nenhum fluxo
-  const mappedEmails = useMemo(() => new Set(FLOW_MAP.flatMap(f => f.emails).map(e => (e||'').trim())), []);
+  const mappedEmails = useMemo(() => new Set(getAllAthenaCampaigns().map(e => (e||'').trim())), []);
   const sazRows      = useMemo(() => attrRows.filter(r => !mappedEmails.has((r.nm_campanha||'').trim())), [attrRows, mappedEmails]);
   const sazNomes     = useMemo(() => [...new Set(sazRows.map(r => (r.nm_campanha||'').trim()))], [sazRows]);
 
