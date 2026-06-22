@@ -225,7 +225,11 @@ function CanalBars({ canais }) {
 function FlowCard({ flow, attrRows, emailMetrics, enrollments }) {
   const [open, setOpen] = useState(false);
 
-  const flowRows   = useMemo(() => attrRows.filter(r => flow.emails.includes(r.nm_campanha)), [attrRows, flow.emails]);
+  const flowRows   = useMemo(() => {
+    const clean = s => (s || '').trim();
+    const emailSet = new Set(flow.emails.map(e => clean(e)));
+    return attrRows.filter(r => emailSet.has(clean(r.nm_campanha)));
+  }, [attrRows, flow.emails]);
   const m          = useMemo(() => calcMetrics(flowRows), [flowRows]);
   const canais     = useMemo(() => calcCanais(flowRows), [flowRows]);
   const enrollment = enrollments.find(e => e.flow_id === flow.flowId);
@@ -449,9 +453,9 @@ function OverviewTab({ rows, loading }) {
 // ── EmailsTab ─────────────────────────────────────────────────────────────
 function EmailsTab({ attrRows, emailMetrics, enrollments, loading }) {
   // Campanhas sazonais = emails que aparecem nos attrRows mas não estão em nenhum fluxo
-  const mappedEmails = useMemo(() => new Set(FLOW_MAP.flatMap(f => f.emails)), []);
-  const sazRows      = useMemo(() => attrRows.filter(r => !mappedEmails.has(r.nm_campanha)), [attrRows, mappedEmails]);
-  const sazNomes     = useMemo(() => [...new Set(sazRows.map(r => r.nm_campanha))], [sazRows]);
+  const mappedEmails = useMemo(() => new Set(FLOW_MAP.flatMap(f => f.emails).map(e => (e||'').trim())), []);
+  const sazRows      = useMemo(() => attrRows.filter(r => !mappedEmails.has((r.nm_campanha||'').trim())), [attrRows, mappedEmails]);
+  const sazNomes     = useMemo(() => [...new Set(sazRows.map(r => (r.nm_campanha||'').trim()))], [sazRows]);
 
   if (loading) return <Loading />;
 

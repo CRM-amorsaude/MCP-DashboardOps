@@ -110,7 +110,8 @@ export function calcTopCampanhas(rows, n = 10) {
 }
 
 export function calcPerEmail(rows, emailName) {
-  const r = rows.filter(x => x.nm_campanha === emailName);
+  const clean = (s) => (s || '').trim();
+  const r = rows.filter(x => clean(x.nm_campanha) === clean(emailName));
   return { nm_campanha: emailName, ...calcMetrics(r), canais: calcCanais(r) };
 }
 
