@@ -18,7 +18,7 @@ export function useAttributionData(startDate, endDate) {
           .select('*')
           .gte('data_referencia', startDate)
           .lte('data_referencia', endDate)
-          .limit(10000);
+          .limit(50000);
         if (err) throw err;
         if (!cancelled) setRows(data || []);
       } catch (e) {
