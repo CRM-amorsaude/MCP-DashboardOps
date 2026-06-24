@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app  = express();
@@ -17,7 +17,6 @@ app.use(express.json());
 app.use(express.static(join(__dirname, 'dist')));
 
 // ── Metabase auth header ─────────────────────────────────────────────────
-// Prefere API key (mais estável); fallback para user/pass session
 const METABASE_API_KEY = process.env.METABASE_API_KEY || '';
 
 async function metabaseHeaders() {
@@ -35,8 +34,6 @@ async function metabaseHeaders() {
 }
 
 // ── /api/attribution ──────────────────────────────────────────────────────
-// Consulta fl_cruzamento_campanhas_hubspot via Metabase com filtro dinâmico
-// Body: { startDate, endDate, flowIds?, erp? }
 app.post('/api/attribution', async (req, res) => {
   const { startDate, endDate, emails, erp } = req.body;
 
@@ -50,7 +47,6 @@ app.post('/api/attribution', async (req, res) => {
   try {
     const mbHeaders = await metabaseHeaders();
 
-    // Lista de campanhas para filtrar (vem do flowMap via frontend)
     const campaignList = (emails || [])
       .map(c => `'${c.replace(/'/g, "''")}'`)
       .join(',');
@@ -106,8 +102,6 @@ app.post('/api/attribution', async (req, res) => {
     if (!queryRes.ok) throw new Error(`Metabase query failed: ${queryRes.status}`);
 
     const raw = await queryRes.json();
-
-    // Transforma o formato colunas/linhas do Metabase em array de objetos
     const cols = raw?.data?.cols?.map(c => c.name) || [];
     const rows = (raw?.data?.rows || []).map(row => {
       const obj = {};
@@ -123,8 +117,6 @@ app.post('/api/attribution', async (req, res) => {
 });
 
 // ── /api/cvortex ─────────────────────────────────────────────────────────
-// Consulta cVortex Odonto (16831) e/ou Medicina (16832) via Metabase
-// Body: { startDate, endDate, bu? }  bu = 'odontologia' | 'medicina' | 'todos'
 app.post('/api/cvortex', async (req, res) => {
   const { startDate, endDate, bu = 'todos' } = req.body;
 
@@ -154,7 +146,6 @@ app.post('/api/cvortex', async (req, res) => {
 
   try {
     let rows = [];
-
     if (bu === 'todos' || bu === 'odontologia') {
       const odonto = await queryQuestion(16831, 'odontologia');
       rows = rows.concat(odonto);
@@ -163,7 +154,6 @@ app.post('/api/cvortex', async (req, res) => {
       const med = await queryQuestion(16832, 'medicina');
       rows = rows.concat(med);
     }
-
     res.json({ rows, total: rows.length });
   } catch (err) {
     console.error('/api/cvortex error:', err.message);
@@ -171,31 +161,40 @@ app.post('/api/cvortex', async (req, res) => {
   }
 });
 
-// ── /api/chat (Claude streaming) ─────────────────────────────────────────
+// ── /api/chat (OpenAI streaming) ─────────────────────────────────────────
 app.post('/api/chat', async (req, res) => {
   const { messages } = req.body;
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return res.status(500).json({ error: 'ANTHROPIC_API_KEY não configurada' });
+
+  if (!process.env.OPENAI_API_KEY) {
+    return res.status(500).json({ error: 'OPENAI_API_KEY não configurada' });
   }
 
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
 
   try {
-    const stream = await client.messages.stream({
-      model:      'claude-sonnet-4-6',
+    const stream = await client.chat.completions.create({
+      model:      'gpt-4o',
       max_tokens: 2048,
-      system: `Você é o Agente Analista CRM do AmorSaúde, especialista em análise de dados de CRM e marketing.
+      stream:     true,
+      messages: [
+        {
+          role:    'system',
+          content: `Você é o Agente Analista CRM do AmorSaúde, especialista em análise de dados de CRM e marketing.
 Analise dados de fluxos de automação HubSpot, métricas de e-mails e atribuição de conversões por campanha.
 Seja direto, analítico e oriente suas respostas para insights de negócio. Responda sempre em português brasileiro.`,
-      messages,
+        },
+        ...messages,
+      ],
     });
 
     for await (const chunk of stream) {
-      if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
-        res.write(`data: ${JSON.stringify({ text: chunk.delta.text })}\n\n`);
+      const text = chunk.choices[0]?.delta?.content || '';
+      if (text) {
+        res.write(`data: ${JSON.stringify({ text })}\n\n`);
       }
     }
     res.write('data: [DONE]\n\n');
