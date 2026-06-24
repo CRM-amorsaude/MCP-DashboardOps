@@ -1,13 +1,13 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Sparkles } from 'lucide-react';
+import { Send, Bot, User, Sparkles, Database } from 'lucide-react';
 
 const SUGGESTED = [
-  'Quais fluxos tiveram maior queda na última semana?',
-  'Qual campanha gerou mais receita no histórico?',
-  'Compare a performance de confirmação vs reativação',
+  'Quais fluxos tiveram maior queda nos últimos 7 dias?',
+  'Qual campanha gerou mais receita nos últimos 30 dias?',
+  'Como está a taxa de conversão de confirmações por canal?',
   'Campanhas de Odonto com maior ticket médio?',
-  'Mostre o funil das campanhas de pós-consulta',
-  'Há e-mails com taxa de spam acima do esperado?',
+  'Quais e-mails têm taxa de abertura acima de 30%?',
+  'Resuma o desempenho do cVortex pós-consulta do mês.',
 ];
 
 function Msg({ role, content }) {
@@ -40,6 +40,7 @@ export default function Agente() {
   const [messages, setMessages] = useState([]);
   const [input, setInput]       = useState('');
   const [loading, setLoading]   = useState(false);
+  const [status, setStatus]     = useState('');
   const bottomRef = useRef(null);
   const inputRef  = useRef(null);
 
@@ -51,20 +52,25 @@ export default function Agente() {
     const msg = text || input.trim();
     if (!msg || loading) return;
     setInput('');
-    setMessages(prev => [...prev, { role: 'user', content: msg }]);
+    setStatus('');
+    const newMessages = [...messages, { role: 'user', content: msg }];
+    setMessages(newMessages);
     setLoading(true);
+
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages: [...messages, { role: 'user', content: msg }].map(m => ({ role: m.role, content: m.content })),
+          messages: newMessages.map(m => ({ role: m.role, content: m.content })),
         }),
       });
+
       const reader = res.body.getReader();
       const dec = new TextDecoder();
       let agentText = '';
-      setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
+      let started = false;
+
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -74,7 +80,14 @@ export default function Agente() {
           if (data === '[DONE]') break;
           try {
             const p = JSON.parse(data);
-            if (p.text) {
+            if (p.status) {
+              setStatus(p.status);
+            } else if (p.text) {
+              setStatus('');
+              if (!started) {
+                started = true;
+                setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
+              }
               agentText += p.text;
               setMessages(prev => {
                 const u = [...prev];
@@ -89,6 +102,7 @@ export default function Agente() {
       setMessages(prev => [...prev, { role: 'assistant', content: 'Erro ao conectar com o agente. Verifique se a API key está configurada.' }]);
     } finally {
       setLoading(false);
+      setStatus('');
       inputRef.current?.focus();
     }
   }
@@ -115,8 +129,8 @@ export default function Agente() {
                 Agente Analista CRM
               </h2>
               <p style={{ fontSize: 12, color: 'var(--color-text-tertiary)', maxWidth: 380, lineHeight: 1.7, margin: 0, fontFamily: 'var(--font-sans)' }}>
-                Faça perguntas sobre fluxos, e-mails, conversões e receita atribuída.
-                O agente analisa os dados do Supabase em linguagem natural.
+                Faça perguntas sobre fluxos, e-mails, confirmações e receita.
+                O agente consulta os dados reais do Supabase antes de responder.
               </p>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 8, maxWidth: 640, width: '100%' }}>
@@ -132,14 +146,8 @@ export default function Agente() {
                   boxShadow: 'var(--shadow-xs)',
                   transition: 'border-color 140ms, box-shadow 140ms',
                 }}
-                  onMouseEnter={e => {
-                    e.currentTarget.style.borderColor = 'var(--as-azul-apatita)';
-                    e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
-                  }}
-                  onMouseLeave={e => {
-                    e.currentTarget.style.borderColor = 'var(--color-border)';
-                    e.currentTarget.style.boxShadow = 'var(--shadow-xs)';
-                  }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--as-azul-apatita)'; e.currentTarget.style.boxShadow = 'var(--shadow-sm)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--color-border)'; e.currentTarget.style.boxShadow = 'var(--shadow-xs)'; }}
                 >
                   {s}
                 </button>
@@ -149,6 +157,7 @@ export default function Agente() {
         ) : (
           <div style={{ maxWidth: 720, margin: '0 auto' }}>
             {messages.map((m, i) => <Msg key={i} role={m.role} content={m.content} />)}
+
             {loading && (
               <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
                 <div style={{
@@ -160,13 +169,22 @@ export default function Agente() {
                   <Bot size={13} color="var(--as-azul-apatita-700)" />
                 </div>
                 <div className="chat-agent" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  {[0, 1, 2].map(i => (
-                    <div key={i} style={{
-                      width: 6, height: 6, borderRadius: '50%',
-                      background: 'var(--as-cinza-300)',
-                      animation: `pulse 1.2s ${i * 0.2}s infinite`,
-                    }} />
-                  ))}
+                  {status ? (
+                    <>
+                      <Database size={12} color="var(--as-azul-apatita)" style={{ flexShrink: 0 }} />
+                      <span style={{ fontSize: 12, color: 'var(--color-text-tertiary)', fontStyle: 'italic', fontFamily: 'var(--font-sans)' }}>
+                        {status}
+                      </span>
+                    </>
+                  ) : (
+                    [0, 1, 2].map(i => (
+                      <div key={i} style={{
+                        width: 6, height: 6, borderRadius: '50%',
+                        background: 'var(--as-cinza-300)',
+                        animation: `pulse 1.2s ${i * 0.2}s infinite`,
+                      }} />
+                    ))
+                  )}
                 </div>
               </div>
             )}
@@ -175,7 +193,6 @@ export default function Agente() {
         )}
       </div>
 
-      {/* Input */}
       <div style={{
         background: 'var(--as-branco)',
         border: '1px solid var(--color-border)',
@@ -189,7 +206,7 @@ export default function Agente() {
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), send())}
-          placeholder="Pergunte sobre fluxos, e-mails, conversões ou receita..."
+          placeholder="Pergunte sobre fluxos, e-mails, confirmações ou receita..."
           style={{
             flex: 1, border: 'none', outline: 'none', fontSize: 13,
             color: 'var(--color-text-primary)',
