@@ -1,10 +1,11 @@
 import { Outlet, NavLink, useLocation } from 'react-router-dom';
-import { Activity, TrendingUp, Bot } from 'lucide-react';
+import { Activity, CalendarCheck, TrendingUp, Bot } from 'lucide-react';
 
 const NAV = [
-  { to: '/operacional', Icon: Activity,   label: 'Operacional',  desc: 'Fluxos e e-mails' },
-  { to: '/estrategico', Icon: TrendingUp, label: 'Estratégico',  desc: 'Atribuição e ROI' },
-  { to: '/agente',      Icon: Bot,        label: 'Agente',       desc: 'Análise por IA' },
+  { to: '/operacional',  Icon: Activity,       label: 'Operacional',  desc: 'Fluxos e e-mails' },
+  { to: '/confirmacoes', Icon: CalendarCheck,  label: 'Confirmações', desc: 'Conversão por canal' },
+  { to: '/estrategico',  Icon: TrendingUp,     label: 'Estratégico',  desc: 'Atribuição e ROI' },
+  { to: '/agente',       Icon: Bot,            label: 'Agente',       desc: 'Análise por IA' },
 ];
 
 const S = {
