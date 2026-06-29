@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react';
-import { fetchAllPaged } from '../lib/fetchAllPaged.js';
+import { supabase } from '../lib/supabase.js';
 
-export function useCvortex(startDate, endDate, bu = 'todos') {
+// Consome rpc_cvortex_resumo (agregação no Postgres).
+// Mantém o formato de linhas que o WhatsAppTab espera:
+// { bu, situacao_pagamento, tipo_tratamento, conversoes, receita }
+export function useCvortex(startDate, endDate /*, bu ignorado: RPC traz ambos */) {
   const [rows, setRows]       = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(null);
@@ -13,20 +16,11 @@ export function useCvortex(startDate, endDate, bu = 'todos') {
       setLoading(true);
       setError(null);
       try {
-        let result;
-        if (bu === 'todos') {
-          // Duas buscas paginadas por BU, mescladas
-          const [med, odo] = await Promise.all([
-            fetchAllPaged('cvortex_pos_consulta', { dateField: 'data_referencia', startDate, endDate, orderField: 'data_referencia', filters: { bu: 'medicina' } }),
-            fetchAllPaged('cvortex_pos_consulta', { dateField: 'data_referencia', startDate, endDate, orderField: 'data_referencia', filters: { bu: 'odontologia' } }),
-          ]);
-          result = [...med, ...odo];
-        } else {
-          result = await fetchAllPaged('cvortex_pos_consulta', {
-            dateField: 'data_referencia', startDate, endDate, orderField: 'data_referencia', filters: { bu },
-          });
-        }
-        if (!cancelled) setRows(result);
+        const { data, error: err } = await supabase.rpc('rpc_cvortex_resumo', {
+          p_start: startDate, p_end: endDate,
+        });
+        if (err) throw err;
+        if (!cancelled) setRows(data || []);
       } catch (e) {
         if (!cancelled) setError(e.message);
       } finally {
@@ -35,7 +29,7 @@ export function useCvortex(startDate, endDate, bu = 'todos') {
     }
     load();
     return () => { cancelled = true; };
-  }, [startDate, endDate, bu]);
+  }, [startDate, endDate]);
 
   return { rows, loading, error };
 }
