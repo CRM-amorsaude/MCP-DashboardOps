@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { format, subDays, parseISO, differenceInDays } from 'date-fns';
-import { supabase } from '../lib/supabase';
+import { fetchAllPaged } from '../lib/fetchAllPaged.js';
 
 const STATUS_ATENDIDO = 'Atendido';
 
@@ -15,13 +15,10 @@ export function useConfirmacoes(startDate, endDate) {
     setLoading(true);
     setError(null);
     try {
-      const { data: rows, error: err } = await supabase
-        .from('confirmacoes')
-        .select('*')
-        .gte('data_referencia', startDate)
-        .lte('data_referencia', endDate);
-      if (err) throw err;
-      setData(rows || []);
+      const rows = await fetchAllPaged('confirmacoes', {
+        dateField: 'data_referencia', startDate, endDate, orderField: 'data_referencia',
+      });
+      setData(rows);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -104,12 +101,10 @@ export async function fetchPeriodoAnterior(startDate, endDate) {
   const prevEnd   = subDays(start, 1);
   const prevStart = subDays(prevEnd, dias - 1);
 
-  const { data: rows, error } = await supabase
-    .from('confirmacoes')
-    .select('*')
-    .gte('data_referencia', format(prevStart, 'yyyy-MM-dd'))
-    .lte('data_referencia', format(prevEnd,   'yyyy-MM-dd'));
-
-  if (error) throw error;
-  return rows || [];
+  return fetchAllPaged('confirmacoes', {
+    dateField:  'data_referencia',
+    startDate:  format(prevStart, 'yyyy-MM-dd'),
+    endDate:    format(prevEnd,   'yyyy-MM-dd'),
+    orderField: 'data_referencia',
+  });
 }
