@@ -1,17 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase.js';
-
-async function fetchBU(startDate, endDate, bu) {
-  const { data, error } = await supabase
-    .from('cvortex_pos_consulta')
-    .select('*')
-    .gte('data_referencia', startDate)
-    .lte('data_referencia', endDate)
-    .eq('bu', bu)
-    .limit(100000);
-  if (error) throw error;
-  return data || [];
-}
+import { fetchAllPaged } from '../lib/fetchAllPaged.js';
 
 export function useCvortex(startDate, endDate, bu = 'todos') {
   const [rows, setRows]       = useState([]);
@@ -27,14 +15,16 @@ export function useCvortex(startDate, endDate, bu = 'todos') {
       try {
         let result;
         if (bu === 'todos') {
-          // Duas queries separadas para evitar corte por limite de rows
+          // Duas buscas paginadas por BU, mescladas
           const [med, odo] = await Promise.all([
-            fetchBU(startDate, endDate, 'medicina'),
-            fetchBU(startDate, endDate, 'odontologia'),
+            fetchAllPaged('cvortex_pos_consulta', { dateField: 'data_referencia', startDate, endDate, orderField: 'data_referencia', filters: { bu: 'medicina' } }),
+            fetchAllPaged('cvortex_pos_consulta', { dateField: 'data_referencia', startDate, endDate, orderField: 'data_referencia', filters: { bu: 'odontologia' } }),
           ]);
           result = [...med, ...odo];
         } else {
-          result = await fetchBU(startDate, endDate, bu);
+          result = await fetchAllPaged('cvortex_pos_consulta', {
+            dateField: 'data_referencia', startDate, endDate, orderField: 'data_referencia', filters: { bu },
+          });
         }
         if (!cancelled) setRows(result);
       } catch (e) {
