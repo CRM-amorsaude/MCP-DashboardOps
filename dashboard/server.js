@@ -76,13 +76,14 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'consultar_atribuicao_campanhas',
-      description: 'Retorna atribuição de receita por campanha de e-mail: agendamentos, atendimentos, propostas e faturamento. Use para ROI, receita gerada, top campanhas ou comparação financeira.',
+      description: 'Retorna atribuição por campanha: agendamentos, atendimentos, propostas pagas e faturamento. Use para ROI, receita, top campanhas ou comparação. Se o usuário perguntar sobre UMA campanha específica (ex: "por que a campanha X está zerada?"), passe o nome em campanha para receber o detalhamento por origem e status, que explica zeros.',
       parameters: {
         type: 'object',
         properties: {
           start_date: { type: 'string', description: 'Data início (yyyy-MM-dd)' },
           end_date:   { type: 'string', description: 'Data fim (yyyy-MM-dd)' },
-          bu: { type: 'string', enum: ['todos', 'Medicina', 'Odonto'], description: 'Filtrar por BU' },
+          bu: { type: 'string', enum: ['todos', 'medicina', 'odontologia'], description: 'Filtrar por BU' },
+          campanha: { type: 'string', description: 'Opcional. Nome (ou parte) de uma campanha para diagnóstico detalhado por origem/status.' },
         },
         required: ['start_date', 'end_date'],
       },
@@ -183,30 +184,66 @@ async function executeTool(name, args) {
   }
 
   if (name === 'consultar_atribuicao_campanhas') {
-    let query = sb
-      .from('campaign_attribution_detail')
-      .select('nm_campanha, erp, origem_descricao, nm_status, conversoes, receita_atribuida')
-      .gte('data_referencia', args.start_date)
-      .lte('data_referencia', args.end_date);
+    const bu = ['medicina', 'odontologia'].includes(args.bu) ? args.bu : 'todos';
 
-    if (args.bu === 'Medicina') query = query.in('erp', ['Amei', 'Amei!']);
-    else if (args.bu === 'Odonto') query = query.in('erp', ['Webdental', 'Webvidas']);
+    // Diagnóstico de UMA campanha: detalha por origem + status para explicar zeros
+    if (args.campanha) {
+      const { data: det = [] } = await sb
+        .from('campaign_attribution_detail')
+        .select('nm_campanha, origem_descricao, nm_status, conversoes, receita_atribuida, data_referencia')
+        .ilike('nm_campanha', `%${args.campanha}%`)
+        .gte('data_referencia', args.start_date)
+        .lte('data_referencia', args.end_date)
+        .limit(100000);
 
-    const { data = [] } = await query.limit(100000);
+      if (det.length === 0) {
+        return {
+          aviso: `Nenhum registro para "${args.campanha}" no período ${args.start_date} a ${args.end_date}.`,
+          dica: 'A campanha pode não ter gerado conversões nesse período. Tente uma janela maior (ex: 90 dias) ou confira o nome exato.',
+        };
+      }
 
-    const agg = {};
-    for (const r of data) {
-      const k = r.nm_campanha;
-      if (!agg[k]) agg[k] = { campanha: k, erp: r.erp, conversoes: 0, receita: 0 };
-      agg[k].conversoes += r.conversoes       || 0;
-      agg[k].receita    += r.receita_atribuida || 0;
+      // Distribuição por origem + status no período
+      const porOrigem = {};
+      let minData = null, maxData = null;
+      for (const r of det) {
+        const k = `${r.origem_descricao} | ${r.nm_status}`;
+        if (!porOrigem[k]) porOrigem[k] = { origem: r.origem_descricao, status: r.nm_status, conversoes: 0, receita: 0 };
+        porOrigem[k].conversoes += r.conversoes || 0;
+        porOrigem[k].receita    += r.receita_atribuida || 0;
+        if (!minData || r.data_referencia < minData) minData = r.data_referencia;
+        if (!maxData || r.data_referencia > maxData) maxData = r.data_referencia;
+      }
+
+      return {
+        campanha: args.campanha,
+        periodo: `${args.start_date} a ${args.end_date}`,
+        data_referencia_min: minData,
+        data_referencia_max: maxData,
+        detalhamento: Object.values(porOrigem)
+          .map(r => ({ ...r, receita: fmtBRL(r.receita) }))
+          .sort((a, b) => b.conversoes - a.conversoes),
+        nota: 'Agendamentos = origens Agendamento/Atendimento. Atendimentos = (Atendimento+Quitadas) ou (Agendamento+Atendido). Se agendamentos estão zerados mas há registros, verifique as datas: a campanha pode ter parado de gerar conversões fora da janela selecionada.',
+      };
     }
 
-    return Object.values(agg).map(r => ({
-      ...r,
-      receita:      fmtBRL(r.receita),
-      ticket_medio: r.conversoes > 0 ? fmtBRL(r.receita / r.conversoes) : 'R$ 0,00',
-    })).sort((a, b) => b.conversoes - a.conversoes).slice(0, 20);
+    // Visão geral por campanha via RPC (consistente com o dashboard)
+    const { data = [], error } = await sb.rpc('rpc_attribution_por_campanha', {
+      p_start: args.start_date, p_end: args.end_date, p_bu: bu,
+    });
+    if (error) return { erro: error.message };
+
+    return (data || [])
+      .map(r => ({
+        campanha:     r.nm_campanha,
+        agendamentos: r.agendamentos,
+        atendimentos: r.atendimentos,
+        propostas_pagas: r.qt_propostas_pagas,
+        fat_total:    fmtBRL(r.fat_total),
+        ticket_medio: r.qt_propostas_pagas > 0 ? fmtBRL(Number(r.fat_total) / r.qt_propostas_pagas) : 'R$ 0,00',
+      }))
+      .sort((a, b) => Number(b.fat_total.replace(/[^0-9,]/g,'').replace(',','.')) - Number(a.fat_total.replace(/[^0-9,]/g,'').replace(',','.')))
+      .slice(0, 20);
   }
 
   if (name === 'consultar_confirmacoes') {
@@ -362,7 +399,7 @@ Data de hoje: ${today}.
 Você tem acesso a ferramentas que consultam dados reais do CRM:
 - consultar_metricas_email: métricas de e-mails HubSpot (abertura, clique, bounce, spam)
 - consultar_fluxos_hubspot: inscrições nos fluxos de automação
-- consultar_atribuicao_campanhas: receita e conversões atribuídas por campanha (janela 7d agendamento, 45d pós-consulta)
+- consultar_atribuicao_campanhas: receita e conversões por campanha. Para diagnosticar UMA campanha (ex: "por que X está zerada?"), passe o parâmetro campanha e receba o detalhamento por origem/status + datas min/max.
 - consultar_confirmacoes: confirmações de consulta por canal (WhatsApp, E-mail, Push) e taxa de conversão
 - consultar_cvortex: propostas e receita pós-consulta via cVortex (WhatsApp)
 
@@ -372,7 +409,13 @@ REGRAS:
 - Cite os números reais retornados pelas ferramentas na sua resposta.
 - Seja direto e oriente a resposta para insights de negócio acionáveis.
 - Formate valores monetários em Real brasileiro (R$ 1.234,56).
-- Responda sempre em português brasileiro.`,
+- Responda sempre em português brasileiro.
+
+CONHECIMENTO SOBRE ATRIBUIÇÃO (importante para a diretoria):
+- A janela de atribuição é de 7 dias para agendamento/atendimento e 45 dias para pós-consulta. O dashboard filtra pela data_referencia (data de criação da consulta).
+- Uma campanha pode aparecer com agendamentos ZERADOS por motivos legítimos, não por erro: (1) parou de gerar conversões antes da janela selecionada — verifique data_referencia_max no detalhamento; (2) é uma campanha antiga/descontinuada com pouquíssimos registros; (3) é um e-mail de pesquisa/NPS que não gera agendamento por natureza.
+- Quando perguntarem por que uma campanha está zerada, use consultar_atribuicao_campanhas com o parâmetro campanha, analise as datas e o detalhamento por origem, e explique a causa provável. Sugira ampliar o período se os dados estiverem fora da janela.
+- Atendimento conta como: origem 'Atendimento' com status 'Quitadas', OU origem 'Agendamento' com status 'Atendido'. Nem toda campanha registra do mesmo jeito.`,
   };
 
   try {
