@@ -1,33 +1,16 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase.js';
 
-const PAGE_SIZE = 1000;
-
-// Busca paginada: o Supabase tem um cap de rows por request (tipicamente 1000).
-// Sem paginar, registros são truncados silenciosamente e campanhas inteiras
-// somem da agregação. Paginamos via range() até esgotar os dados.
-async function fetchAllPaged(startDate, endDate) {
-  let all = [];
-  let from = 0;
-  while (true) {
-    const { data, error } = await supabase
-      .from('campaign_attribution_detail')
-      .select('*')
-      .gte('data_referencia', startDate)
-      .lte('data_referencia', endDate)
-      .order('id', { ascending: true })
-      .range(from, from + PAGE_SIZE - 1);
-    if (error) throw error;
-    if (!data || data.length === 0) break;
-    all = all.concat(data);
-    if (data.length < PAGE_SIZE) break;
-    from += PAGE_SIZE;
-  }
-  return all;
-}
-
-export function useAttributionData(startDate, endDate) {
-  const [rows, setRows]       = useState([]);
+// Consome as RPCs de atribuição (cálculo feito no Postgres).
+// Retorna dados já agregados, sem trafegar linhas cruas.
+export function useAttributionData(startDate, endDate, bu = 'todos') {
+  const [data, setData] = useState({
+    porCampanha:   [],
+    canais:        [],
+    especialidades: [],
+    convenios:     [],
+    fatMes:        [],
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(null);
 
@@ -37,9 +20,28 @@ export function useAttributionData(startDate, endDate) {
     async function load() {
       setLoading(true);
       setError(null);
+      const args = { p_start: startDate, p_end: endDate, p_bu: bu };
       try {
-        const data = await fetchAllPaged(startDate, endDate);
-        if (!cancelled) setRows(data);
+        const [camp, can, esp, conv, fat] = await Promise.all([
+          supabase.rpc('rpc_attribution_por_campanha', args),
+          supabase.rpc('rpc_attribution_canais', args),
+          supabase.rpc('rpc_attribution_especialidades', args),
+          supabase.rpc('rpc_attribution_convenios', args),
+          supabase.rpc('rpc_attribution_fat_mes', args),
+        ]);
+
+        const firstErr = [camp, can, esp, conv, fat].find(r => r.error);
+        if (firstErr?.error) throw firstErr.error;
+
+        if (!cancelled) {
+          setData({
+            porCampanha:    camp.data || [],
+            canais:         can.data  || [],
+            especialidades: esp.data  || [],
+            convenios:      conv.data || [],
+            fatMes:         fat.data  || [],
+          });
+        }
       } catch (e) {
         if (!cancelled) setError(e.message);
       } finally {
@@ -48,7 +50,7 @@ export function useAttributionData(startDate, endDate) {
     }
     load();
     return () => { cancelled = true; };
-  }, [startDate, endDate]);
+  }, [startDate, endDate, bu]);
 
-  return { rows, loading, error };
+  return { data, loading, error };
 }
