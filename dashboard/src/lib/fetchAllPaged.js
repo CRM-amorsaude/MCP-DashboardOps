@@ -1,54 +1,59 @@
 import { supabase } from './supabase.js';
 
 const PAGE_SIZE = 1000;
-const MAX_PAGES = 500; // trava de segurança: 500k linhas máx
+const MAX_PAGES = 500;
+const PARALLEL  = 6; // requisições simultâneas por lote
+
+function buildQuery(table, { dateField, startDate, endDate, filters, orderField, columns }) {
+  let q = supabase.from(table).select(columns || '*', { count: 'exact' });
+  if (dateField && startDate) q = q.gte(dateField, startDate);
+  if (dateField && endDate)   q = q.lte(dateField, endDate);
+  for (const [col, val] of Object.entries(filters || {})) q = q.eq(col, val);
+  return q.order(orderField, { ascending: true });
+}
 
 /**
- * Busca paginada genérica para contornar o cap de rows do Supabase.
- * Pagina via .range() em blocos até esgotar os dados, com trava de
- * segurança contra loop infinito.
+ * Busca paginada com paralelismo.
+ * 1ª requisição traz a contagem exata (count) + primeira página.
+ * As páginas restantes são buscadas em lotes paralelos.
  */
-export async function fetchAllPaged(table, {
-  dateField,
-  startDate,
-  endDate,
-  orderField = 'id',
-  filters = {},
-} = {}) {
-  let all  = [];
-  let page = 0;
+export async function fetchAllPaged(table, opts = {}) {
+  const { orderField = 'id' } = opts;
 
-  while (page < MAX_PAGES) {
-    const from = page * PAGE_SIZE;
-    const to   = from + PAGE_SIZE - 1;
+  // Página 0: pega count exato + primeiras 1000 linhas
+  const first = await buildQuery(table, { ...opts, orderField })
+    .range(0, PAGE_SIZE - 1);
 
-    let query = supabase.from(table).select('*');
+  if (first.error) {
+    console.error(`fetchAllPaged(${table}) erro:`, first.error.message);
+    return [];
+  }
 
-    if (dateField && startDate) query = query.gte(dateField, startDate);
-    if (dateField && endDate)   query = query.lte(dateField, endDate);
+  const rows  = first.data || [];
+  const total = first.count ?? rows.length;
 
-    for (const [col, val] of Object.entries(filters)) {
-      query = query.eq(col, val);
+  if (total <= PAGE_SIZE) return rows;
+
+  const totalPages = Math.min(Math.ceil(total / PAGE_SIZE), MAX_PAGES);
+  let all = [...rows];
+
+  // Páginas 1..N em lotes paralelos
+  for (let batchStart = 1; batchStart < totalPages; batchStart += PARALLEL) {
+    const batch = [];
+    for (let p = batchStart; p < batchStart + PARALLEL && p < totalPages; p++) {
+      const from = p * PAGE_SIZE;
+      batch.push(
+        buildQuery(table, { ...opts, orderField }).range(from, from + PAGE_SIZE - 1)
+      );
     }
-
-    query = query.order(orderField, { ascending: true }).range(from, to);
-
-    const { data, error } = await query;
-
-    if (error) {
-      console.error(`fetchAllPaged(${table}) erro na página ${page}:`, error.message);
-      // Retorna o que já tem em vez de travar a UI
-      break;
+    const results = await Promise.all(batch);
+    for (const r of results) {
+      if (r.error) {
+        console.error(`fetchAllPaged(${table}) erro em lote:`, r.error.message);
+        continue;
+      }
+      if (r.data) all = all.concat(r.data);
     }
-
-    if (!data || data.length === 0) break;
-
-    all = all.concat(data);
-
-    // Última página: veio menos que o tamanho cheio
-    if (data.length < PAGE_SIZE) break;
-
-    page += 1;
   }
 
   return all;
