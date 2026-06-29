@@ -8,10 +8,20 @@ export const POS_ORIGINS       = ['Pós Consulta', 'Proposta Manual', 'Proposta 
 export const PAID_POS_STATUS   = ['Quitadas', 'Executada', 'Parcialmente quitada'];
 export const PAID_ATEND_STATUS = ['Quitadas', 'Parcialmente quitada'];
 export const PAID_STATUS       = ['Quitadas', 'Efetivado'];
+export const AGEND_ORIGINS     = ['Agendamento', 'Atendimento'];
 
 export const isMed  = r => MED_ERPS.includes(r.erp);
 export const isOdo  = r => ODO_ERPS.includes(r.erp) || ODO_ORIGINS.includes(r.origem_descricao);
 export const isPaid = r => PAID_STATUS.includes(r.nm_status);
+
+// Atendimento efetivado:
+//   origem 'Atendimento' com status 'Quitadas', OU
+//   origem 'Agendamento' com status 'Atendido'
+export const isAtendido = r => {
+  const o = (r.origem_descricao || '').trim();
+  const s = (r.nm_status || '').trim();
+  return (o === 'Atendimento' && s === 'Quitadas') || (o === 'Agendamento' && s === 'Atendido');
+};
 
 export function filterBU(rows, bu) {
   if (!bu || bu === 'todos') return rows;
@@ -22,24 +32,23 @@ export function filterBU(rows, bu) {
 
 export function calcMetrics(rows) {
   const n = v => Number(v) || 0;
+  const orig = r => (r.origem_descricao || '').trim();
+  const stat = r => (r.nm_status || '').trim();
 
   // Agendamentos: origem IN ('Agendamento', 'Atendimento') — todos os status
   const agendamentos = rows
-    .filter(r => ['Agendamento', 'Atendimento'].includes((r.origem_descricao || '').trim()))
+    .filter(r => AGEND_ORIGINS.includes(orig(r)))
     .reduce((s, r) => s + n(r.conversoes), 0);
 
-  // Atendimentos: origem = 'Atendimento' — todos os status
+  // Atendimentos: (origem 'Atendimento' + 'Quitadas') OU (origem 'Agendamento' + 'Atendido')
   const atendimentos = rows
-    .filter(r => (r.origem_descricao || '').trim() === 'Atendimento')
+    .filter(isAtendido)
     .reduce((s, r) => s + n(r.conversoes), 0);
 
-  // Valor atendimento: origem = 'Atendimento' AND status pago (Quitadas, Parcialmente quitada)
+  // Valor atendimento: mesma regra de atendimentos → receita
   const valor_atend = rows
-    .filter(r => (r.origem_descricao || '').trim() === 'Atendimento' && PAID_ATEND_STATUS.includes((r.nm_status || '').trim()))
+    .filter(isAtendido)
     .reduce((s, r) => s + n(r.receita_atribuida), 0);
-
-  const orig = r => (r.origem_descricao || '').trim();
-  const stat = r => (r.nm_status || '').trim();
 
   // Qt Propostas: origem IN POS_ORIGINS AND medicina — todos os status
   const qt_propostas = rows
@@ -77,7 +86,7 @@ export function calcMetrics(rows) {
 
 export function calcCanais(rows) {
   // Considera apenas origem = Agendamento ou Atendimento
-  const agRows = rows.filter(r => ['Agendamento', 'Atendimento'].includes((r.origem_descricao || '').trim()));
+  const agRows = rows.filter(r => AGEND_ORIGINS.includes((r.origem_descricao || '').trim()));
   const map = {};
   for (const r of agRows) {
     const canal = r.nm_canal || 'Desconhecido';
@@ -125,7 +134,7 @@ export function calcFatByMonth(rows) {
     const val = Number(r.receita_atribuida) || 0;
     if (POS_ORIGINS.includes(r.origem_descricao) && isMed(r) && PAID_POS_STATUS.includes(r.nm_status)) map[month].pos += val;
     if (ODO_ORIGINS.includes(r.origem_descricao) && r.nm_status === 'Efetivado') map[month].odo += val;
-    if ((r.origem_descricao||'').trim() === 'Atendimento' && PAID_ATEND_STATUS.includes((r.nm_status||'').trim())) map[month].atend += val;
+    if (isAtendido(r)) map[month].atend += val;
   }
   return Object.values(map).sort((a, b) => a.month.localeCompare(b.month));
 }
