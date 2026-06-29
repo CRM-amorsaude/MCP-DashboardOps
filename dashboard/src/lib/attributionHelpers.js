@@ -1,140 +1,84 @@
-// Helpers de atribuição HubSpot
-// Fonte: campaign_attribution_detail (Supabase) ← fl_cruzamento_campanhas_hubspot
+// Helpers de atribuição — adaptados para consumir dados das RPCs.
+// As RPCs já entregam UMA linha por nm_campanha com os números calculados:
+//   { nm_campanha, agendamentos, atendimentos, valor_atend,
+//     qt_propostas, qt_propostas_pagas, fat_pos, fat_odo, fat_total }
+// Aqui só somamos campos prontos — sem reprocessar linhas cruas.
 
-export const MED_ERPS          = ['Amei', 'Amei!'];
-export const ODO_ERPS          = ['Webdental', 'Webvidas'];
-export const ODO_ORIGINS       = ['Odontologia', 'DentalVidas'];
-export const POS_ORIGINS       = ['Pós Consulta', 'Proposta Manual', 'Proposta Automática'];
-export const PAID_POS_STATUS   = ['Quitadas', 'Executada', 'Parcialmente quitada'];
-export const PAID_ATEND_STATUS = ['Quitadas', 'Parcialmente quitada'];
-export const PAID_STATUS       = ['Quitadas', 'Efetivado'];
-export const AGEND_ORIGINS     = ['Agendamento', 'Atendimento'];
+const n = v => Number(v) || 0;
 
-export const isMed  = r => MED_ERPS.includes(r.erp);
-export const isOdo  = r => ODO_ERPS.includes(r.erp) || ODO_ORIGINS.includes(r.origem_descricao);
-export const isPaid = r => PAID_STATUS.includes(r.nm_status);
-
-// Atendimento efetivado:
-//   origem 'Atendimento' com status 'Quitadas', OU
-//   origem 'Agendamento' com status 'Atendido'
-export const isAtendido = r => {
-  const o = (r.origem_descricao || '').trim();
-  const s = (r.nm_status || '').trim();
-  return (o === 'Atendimento' && s === 'Quitadas') || (o === 'Agendamento' && s === 'Atendido');
-};
-
-export function filterBU(rows, bu) {
-  if (!bu || bu === 'todos') return rows;
-  if (bu === 'medicina')    return rows.filter(isMed);
-  if (bu === 'odontologia') return rows.filter(isOdo);
-  return rows;
-}
-
-export function calcMetrics(rows) {
-  const n = v => Number(v) || 0;
-  const orig = r => (r.origem_descricao || '').trim();
-  const stat = r => (r.nm_status || '').trim();
-
-  // Agendamentos: origem IN ('Agendamento', 'Atendimento') — todos os status
-  const agendamentos = rows
-    .filter(r => AGEND_ORIGINS.includes(orig(r)))
-    .reduce((s, r) => s + n(r.conversoes), 0);
-
-  // Atendimentos: (origem 'Atendimento' + 'Quitadas') OU (origem 'Agendamento' + 'Atendido')
-  const atendimentos = rows
-    .filter(isAtendido)
-    .reduce((s, r) => s + n(r.conversoes), 0);
-
-  // Valor atendimento: mesma regra de atendimentos → receita
-  const valor_atend = rows
-    .filter(isAtendido)
-    .reduce((s, r) => s + n(r.receita_atribuida), 0);
-
-  // Qt Propostas: origem IN POS_ORIGINS AND medicina — todos os status
-  const qt_propostas = rows
-    .filter(r => POS_ORIGINS.includes(orig(r)) && isMed(r))
-    .reduce((s, r) => s + n(r.conversoes), 0);
-
-  // Qt Propostas Pagas: POS_ORIGINS + medicina + status pago
-  const qt_propostas_pagas = rows
-    .filter(r => POS_ORIGINS.includes(orig(r)) && isMed(r) && PAID_POS_STATUS.includes(stat(r)))
-    .reduce((s, r) => s + n(r.conversoes), 0);
-
-  // Fat. Pós: POS_ORIGINS + medicina + status pago → receita
-  const fat_pos = rows
-    .filter(r => POS_ORIGINS.includes(orig(r)) && isMed(r) && PAID_POS_STATUS.includes(stat(r)))
-    .reduce((s, r) => s + n(r.receita_atribuida), 0);
-
-  // Fat. Odonto: origem IN ('Odontologia', 'DentalVidas') AND status = 'Efetivado'
-  const fat_odo = rows
-    .filter(r => ODO_ORIGINS.includes(orig(r)) && stat(r) === 'Efetivado')
-    .reduce((s, r) => s + n(r.receita_atribuida), 0);
-
-  // Fat. Total: valor_atend + fat_pos + fat_odo
-  const fat_total = valor_atend + fat_pos + fat_odo;
-
-  const propostas_pagas = qt_propostas_pagas;
-  const ticket_medio    = propostas_pagas > 0 ? fat_total / propostas_pagas : 0;
-
-  return {
-    agendamentos, atendimentos, valor_atend,
-    qt_propostas, qt_propostas_pagas,
-    fat_pos, fat_odo, fat_total,
-    propostas_pagas, ticket_medio,
+// Soma um conjunto de linhas-por-campanha (vindas da RPC) num único objeto de métricas.
+export function sumCampanhas(rows) {
+  const acc = {
+    agendamentos: 0, atendimentos: 0, valor_atend: 0,
+    qt_propostas: 0, qt_propostas_pagas: 0,
+    fat_pos: 0, fat_odo: 0, fat_total: 0,
   };
-}
-
-export function calcCanais(rows) {
-  // Considera apenas origem = Agendamento ou Atendimento
-  const agRows = rows.filter(r => AGEND_ORIGINS.includes((r.origem_descricao || '').trim()));
-  const map = {};
-  for (const r of agRows) {
-    const canal = r.nm_canal || 'Desconhecido';
-    map[canal] = (map[canal] || 0) + (Number(r.conversoes) || 0);
-  }
-  const total = Object.values(map).reduce((s, v) => s + v, 0);
-  return Object.entries(map)
-    .sort((a, b) => b[1] - a[1])
-    .map(([label, count]) => ({ label, count, pct: total > 0 ? Math.round(count / total * 100) : 0 }));
-}
-
-export function calcEspecialidades(rows) {
-  const map = {};
   for (const r of rows) {
-    const esp = r.nm_especialidade || 'Desconhecido';
-    map[esp] = (map[esp] || 0) + (Number(r.conversoes) || 0);
+    acc.agendamentos       += n(r.agendamentos);
+    acc.atendimentos       += n(r.atendimentos);
+    acc.valor_atend        += n(r.valor_atend);
+    acc.qt_propostas       += n(r.qt_propostas);
+    acc.qt_propostas_pagas += n(r.qt_propostas_pagas);
+    acc.fat_pos            += n(r.fat_pos);
+    acc.fat_odo            += n(r.fat_odo);
+    acc.fat_total          += n(r.fat_total);
   }
-  return Object.entries(map).sort((a, b) => b[1] - a[1]).map(([label, count]) => ({ label, count }));
+  acc.propostas_pagas = acc.qt_propostas_pagas;
+  acc.ticket_medio    = acc.propostas_pagas > 0 ? acc.fat_total / acc.propostas_pagas : 0;
+  return acc;
 }
 
-export function calcTopCampanhas(rows, n = 10) {
-  const map = {};
-  for (const r of rows) {
-    if (!map[r.nm_campanha]) map[r.nm_campanha] = { nm_campanha: r.nm_campanha, conversoes: 0, receita: 0 };
-    map[r.nm_campanha].conversoes += Number(r.conversoes) || 0;
-    const m = calcMetrics([r]);
-    map[r.nm_campanha].receita += m.fat_total;
+// Métrica de uma única campanha (linha da RPC). Retorna zeros se não achar.
+export function metricsForCampanha(porCampanha, nm) {
+  const clean = s => (s || '').trim();
+  const row = porCampanha.find(r => clean(r.nm_campanha) === clean(nm));
+  if (!row) {
+    return {
+      agendamentos: 0, atendimentos: 0, valor_atend: 0,
+      qt_propostas: 0, qt_propostas_pagas: 0,
+      fat_pos: 0, fat_odo: 0, fat_total: 0,
+      propostas_pagas: 0, ticket_medio: 0,
+    };
   }
-  return Object.values(map).sort((a, b) => b.receita - a.receita).slice(0, n);
+  return sumCampanhas([row]);
 }
 
-export function calcPerEmail(rows, emailName) {
-  const clean = (s) => (s || '').trim();
-  const r = rows.filter(x => clean(x.nm_campanha) === clean(emailName));
-  return { nm_campanha: emailName, ...calcMetrics(r), canais: calcCanais(r) };
+// Top N campanhas por faturamento total (linhas já prontas da RPC).
+export function topCampanhas(porCampanha, count = 10) {
+  return [...porCampanha]
+    .map(r => ({ nm_campanha: r.nm_campanha, conversoes: n(r.agendamentos), receita: n(r.fat_total) }))
+    .sort((a, b) => b.receita - a.receita)
+    .slice(0, count);
 }
 
-export function calcFatByMonth(rows) {
-  const map = {};
-  for (const r of rows) {
-    const date  = r.data_referencia || '';
-    const month = date.substring(0, 7);
-    if (!month) continue;
-    if (!map[month]) map[month] = { month, pos: 0, odo: 0, atend: 0 };
-    const val = Number(r.receita_atribuida) || 0;
-    if (POS_ORIGINS.includes(r.origem_descricao) && isMed(r) && PAID_POS_STATUS.includes(r.nm_status)) map[month].pos += val;
-    if (ODO_ORIGINS.includes(r.origem_descricao) && r.nm_status === 'Efetivado') map[month].odo += val;
-    if (isAtendido(r)) map[month].atend += val;
-  }
-  return Object.values(map).sort((a, b) => a.month.localeCompare(b.month));
+// Converte saída de rpc_attribution_canais em {label,count,pct}
+export function canaisToBars(canais) {
+  const total = canais.reduce((s, c) => s + n(c.conversoes), 0);
+  return canais.map(c => ({
+    label: c.nm_canal,
+    count: n(c.conversoes),
+    pct:   total > 0 ? Math.round(n(c.conversoes) / total * 100) : 0,
+  }));
+}
+
+// Converte rpc_attribution_especialidades em {label,count}
+export function especialidadesToList(esps) {
+  return esps.map(e => ({ label: e.nm_especialidade, count: n(e.conversoes) }));
+}
+
+// Converte rpc_attribution_convenios em {label,count,pct}
+export function conveniosToBars(convs, topN = 4) {
+  const total = convs.reduce((s, c) => s + n(c.conversoes), 0);
+  return convs.slice(0, topN).map(c => ({
+    label: c.nm_convenio,
+    count: n(c.conversoes),
+    pct:   total > 0 ? Math.round(n(c.conversoes) / total * 100) : 0,
+  }));
+}
+
+// Converte rpc_attribution_fat_mes em [{month,pos,odo,atend}]
+export function fatMesToSeries(fatMes) {
+  return fatMes.map(r => ({
+    month: r.mes, pos: n(r.pos), odo: n(r.odo), atend: n(r.atend),
+  }));
 }
