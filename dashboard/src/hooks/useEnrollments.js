@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase.js';
+import { fetchAllPaged } from '../lib/fetchAllPaged.js';
 
 export function useEnrollments(startDate, endDate) {
   const [data, setData]       = useState([]);
@@ -12,13 +12,9 @@ export function useEnrollments(startDate, endDate) {
     async function load() {
       setLoading(true);
       try {
-        const { data: rows, error: err } = await supabase
-          .from('hs_workflow_enrollments')
-          .select('*')
-          .gte('date', startDate)
-          .lte('date', endDate)
-          .order('date', { ascending: true });
-        if (err) throw err;
+        const rows = await fetchAllPaged('hs_workflow_enrollments', {
+          dateField: 'date', startDate, endDate, orderField: 'date',
+        });
         if (cancelled) return;
 
         const byFlow = {};
