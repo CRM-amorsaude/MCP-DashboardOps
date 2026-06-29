@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { format, subDays } from 'date-fns';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
@@ -12,9 +12,10 @@ import { useCvortex } from '../hooks/useCvortex.js';
 import { useEnrollments } from '../hooks/useEnrollments.js';
 import { useEmailMetrics } from '../hooks/useEmailMetrics.js';
 import {
-  calcMetrics, calcCanais, calcEspecialidades, calcTopCampanhas,
-  calcFatByMonth, calcPerEmail, filterBU, isPaid,
+  sumCampanhas, metricsForCampanha, topCampanhas,
+  canaisToBars, especialidadesToList, conveniosToBars, fatMesToSeries,
 } from '../lib/attributionHelpers.js';
+import { supabase } from '../lib/supabase.js';
 
 // ── helpers ───────────────────────────────────────────────────────────────
 function todayStr() { return format(new Date(), 'yyyy-MM-dd'); }
@@ -116,7 +117,7 @@ function Funil({ inscricoes, enviados, abertos, agendamentos, atendimentos, prop
 }
 
 // ── Tabela e-mails individuais ─────────────────────────────────────────────
-function EmailTable({ emails, flow, emailMetrics, attrRows }) {
+function EmailTable({ emails, flow, emailMetrics, porCampanha }) {
   const TH = ({ children, red, right }) => (
     <th style={{ textAlign:right?'right':'left', color:red?'var(--as-vermelho)':'var(--color-text-tertiary)' }}>
       {children}
@@ -125,7 +126,7 @@ function EmailTable({ emails, flow, emailMetrics, attrRows }) {
   const rows = emails.map(nm => {
     const em = emailMetrics.find(e => e.hs_name === nm) || {};
     const athenaName = flow ? getAthenaName(flow, nm) : nm;
-    const m  = calcPerEmail(attrRows, athenaName);
+    const m  = metricsForCampanha(porCampanha, athenaName);
     return { nm, ...em, ...m };
   });
   const tot = {
@@ -223,17 +224,28 @@ function CanalBars({ canais }) {
 }
 
 // ── FlowCard ──────────────────────────────────────────────────────────────
-function FlowCard({ flow, attrRows, emailMetrics, enrollments }) {
+function FlowCard({ flow, porCampanha, canaisPorCampanha, emailMetrics, enrollments }) {
   const [open, setOpen] = useState(false);
 
-  const flowRows   = useMemo(() => {
-    const clean = s => (s || '').trim();
-    const athenaCampaigns = getAthenaCampaigns(flow);
-    const emailSet = new Set(athenaCampaigns.map(e => clean(e)));
-    return attrRows.filter(r => emailSet.has(clean(r.nm_campanha)));
-  }, [attrRows, flow]);
-  const m          = useMemo(() => calcMetrics(flowRows), [flowRows]);
-  const canais     = useMemo(() => calcCanais(flowRows), [flowRows]);
+  const clean = s => (s || '').trim();
+  const athenaCampaigns = useMemo(() => new Set(getAthenaCampaigns(flow).map(clean)), [flow]);
+  const flowCampRows = useMemo(
+    () => porCampanha.filter(r => athenaCampaigns.has(clean(r.nm_campanha))),
+    [porCampanha, athenaCampaigns]
+  );
+  const m = useMemo(() => sumCampanhas(flowCampRows), [flowCampRows]);
+  // Canais por fluxo: soma as linhas (campanha x canal) dos e-mails do fluxo
+  const canais = useMemo(() => {
+    const map = {};
+    for (const r of canaisPorCampanha) {
+      if (!athenaCampaigns.has(clean(r.nm_campanha))) continue;
+      const canal = r.nm_canal || 'Desconhecido';
+      map[canal] = (map[canal] || 0) + (Number(r.conversoes) || 0);
+    }
+    const total = Object.values(map).reduce((s, v) => s + v, 0);
+    return Object.entries(map).sort((a,b)=>b[1]-a[1])
+      .map(([label,count]) => ({ label, count, pct: total>0?Math.round(count/total*100):0 }));
+  }, [canaisPorCampanha, athenaCampaigns]);
   const enrollment = enrollments.find(e => e.flow_id === flow.flowId);
   const inscricoes = enrollment ? enrollment.dailySeries.reduce((s, d) => s + d.enrollments, 0) : 0;
   const enviados   = emailMetrics.filter(e => flow.emails.includes(e.hs_name)).reduce((s, e) => s + e.sent, 0);
@@ -307,7 +319,7 @@ function FlowCard({ flow, attrRows, emailMetrics, enrollments }) {
             <div style={{ fontSize:11, fontWeight:700, color:'var(--color-text-tertiary)', textTransform:'uppercase', letterSpacing:'.07em', marginBottom:8, paddingBottom:5, borderBottom:'1px solid var(--color-border)' }}>
               E-mails individuais
             </div>
-            <EmailTable emails={flow.emails} flow={flow} emailMetrics={emailMetrics} attrRows={attrRows} />
+            <EmailTable emails={flow.emails} flow={flow} emailMetrics={emailMetrics} porCampanha={porCampanha} />
           </div>
 
           {canais.length > 0 && (
@@ -325,22 +337,14 @@ function FlowCard({ flow, attrRows, emailMetrics, enrollments }) {
 }
 
 // ── Overview tab ──────────────────────────────────────────────────────────
-function OverviewTab({ rows, loading }) {
-  const m        = useMemo(() => calcMetrics(rows), [rows]);
-  const esps     = useMemo(() => calcEspecialidades(rows).slice(0, 10), [rows]);
-  const top      = useMemo(() => calcTopCampanhas(rows, 8), [rows]);
-  const canais   = useMemo(() => calcCanais(rows), [rows]);
-  const fatM     = useMemo(() => calcFatByMonth(rows), [rows]);
-  const convenios = useMemo(() => {
-    const map = {};
-    for (const r of rows) {
-      const conv = r.nm_convenio || 'Outros';
-      map[conv] = (map[conv]||0) + (Number(r.conversoes)||0);
-    }
-    const total = Object.values(map).reduce((s,v)=>s+v,0);
-    return Object.entries(map).sort((a,b)=>b[1]-a[1]).slice(0,4)
-      .map(([l,v])=>({ label:l, count:v, pct:total>0?Math.round(v/total*100):0 }));
-  }, [rows]);
+function OverviewTab({ data, loading }) {
+  const { porCampanha, canais: canaisRaw, especialidades, convenios: convRaw, fatMes } = data;
+  const m        = useMemo(() => sumCampanhas(porCampanha), [porCampanha]);
+  const esps     = useMemo(() => especialidadesToList(especialidades).slice(0, 10), [especialidades]);
+  const top      = useMemo(() => topCampanhas(porCampanha, 8), [porCampanha]);
+  const canais   = useMemo(() => canaisToBars(canaisRaw), [canaisRaw]);
+  const fatM     = useMemo(() => fatMesToSeries(fatMes), [fatMes]);
+  const convenios = useMemo(() => conveniosToBars(convRaw, 4), [convRaw]);
 
   const txAg  = m.fat_total > 0 && m.agendamentos > 0 ? ((m.agendamentos / (m.propostas_pagas||1)) * 100).toFixed(1) : '—';
 
@@ -453,10 +457,10 @@ function OverviewTab({ rows, loading }) {
 }
 
 // ── EmailsTab ─────────────────────────────────────────────────────────────
-function EmailsTab({ attrRows, emailMetrics, enrollments, loading }) {
-  // Campanhas sazonais = emails que aparecem nos attrRows mas não estão em nenhum fluxo
+function EmailsTab({ porCampanha, canaisPorCampanha, emailMetrics, enrollments, loading }) {
+  // Campanhas sazonais = campanhas presentes nos dados mas não vinculadas a fluxo
   const mappedEmails = useMemo(() => new Set(getAllAthenaCampaigns().map(e => (e||'').trim())), []);
-  const sazRows      = useMemo(() => attrRows.filter(r => !mappedEmails.has((r.nm_campanha||'').trim())), [attrRows, mappedEmails]);
+  const sazRows      = useMemo(() => porCampanha.filter(r => !mappedEmails.has((r.nm_campanha||'').trim())), [porCampanha, mappedEmails]);
   const sazNomes     = useMemo(() => [...new Set(sazRows.map(r => (r.nm_campanha||'').trim()))], [sazRows]);
 
   if (loading) return <Loading />;
@@ -465,7 +469,7 @@ function EmailsTab({ attrRows, emailMetrics, enrollments, loading }) {
     <>
       <Section title="Fluxos de automação" badge={`${FLOW_MAP.length} fluxos · ${FLOW_MAP.reduce((s,f)=>s+f.emails.length,0)} e-mails`}>
         {FLOW_MAP.map(flow => (
-          <FlowCard key={flow.flowId} flow={flow} attrRows={attrRows} emailMetrics={emailMetrics} enrollments={enrollments} />
+          <FlowCard key={flow.flowId} flow={flow} porCampanha={porCampanha} canaisPorCampanha={canaisPorCampanha} emailMetrics={emailMetrics} enrollments={enrollments} />
         ))}
       </Section>
 
@@ -475,7 +479,7 @@ function EmailsTab({ attrRows, emailMetrics, enrollments, loading }) {
           <div style={{ background:'var(--color-bg-secondary)', borderRadius:'var(--radius-md)', padding:'7px 12px', marginBottom:10, fontSize:11, color:'var(--color-text-tertiary)', fontStyle:'italic' }}>
             Campanhas pontuais não vinculadas a fluxo de automação
           </div>
-          <EmailTable emails={sazNomes} emailMetrics={emailMetrics} attrRows={sazRows} />
+          <EmailTable emails={sazNomes} emailMetrics={emailMetrics} porCampanha={sazRows} />
         </Section>
       )}
     </>
@@ -586,12 +590,20 @@ export default function Estrategico() {
   const [bu, setBU]       = useState('todos');
   const [tab, setTab]     = useState('overview');
 
-  const { rows: allRows, loading: aLoad } = useAttributionData(range.startDate, range.endDate);
-  const { rows: cvRows,  loading: cLoad } = useCvortex(range.startDate, range.endDate, bu);
-  const { data: enrollments }             = useEnrollments(range.startDate, range.endDate);
-  const { data: emailMetrics }            = useEmailMetrics(range.startDate, range.endDate);
+  const { data: attrData, loading: aLoad } = useAttributionData(range.startDate, range.endDate, bu);
+  const { rows: cvRows,  loading: cLoad }   = useCvortex(range.startDate, range.endDate);
+  const { data: enrollments }               = useEnrollments(range.startDate, range.endDate);
+  const { data: emailMetrics }              = useEmailMetrics(range.startDate, range.endDate);
+  const [canaisPorCampanha, setCanaisPorCampanha] = useState([]);
 
-  const rows = useMemo(() => filterBU(allRows, bu), [allRows, bu]);
+  useEffect(() => {
+    if (!range.startDate || !range.endDate) return;
+    let cancelled = false;
+    supabase.rpc('rpc_canais_por_campanha', { p_start: range.startDate, p_end: range.endDate, p_bu: bu })
+      .then(({ data }) => { if (!cancelled) setCanaisPorCampanha(data || []); })
+      .catch(() => { if (!cancelled) setCanaisPorCampanha([]); });
+    return () => { cancelled = true; };
+  }, [range.startDate, range.endDate, bu]);
 
   const tabBtn = active => ({
     fontSize:13, padding:'8px 16px', cursor:'pointer',
@@ -626,9 +638,10 @@ export default function Estrategico() {
         <button style={tabBtn(tab==='whatsapp')} onClick={()=>setTab('whatsapp')}>WhatsApp</button>
       </div>
 
-      {tab==='overview'  && <OverviewTab  rows={rows} loading={aLoad} />}
-      {tab==='emails'    && <EmailsTab    attrRows={rows} emailMetrics={emailMetrics} enrollments={enrollments} loading={aLoad} />}
+      {tab==='overview'  && <OverviewTab  data={attrData} loading={aLoad} />}
+      {tab==='emails'    && <EmailsTab    porCampanha={attrData.porCampanha} canaisPorCampanha={canaisPorCampanha} emailMetrics={emailMetrics} enrollments={enrollments} loading={aLoad} />}
       {tab==='whatsapp'  && <WhatsAppTab  rows={cvRows} loading={cLoad} />}
     </div>
   );
 }
+
