@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase.js';
+import { fetchAllPaged } from '../lib/fetchAllPaged.js';
 
 export function useEmailMetrics(startDate, endDate) {
   const [data, setData]       = useState([]);
@@ -12,13 +12,9 @@ export function useEmailMetrics(startDate, endDate) {
     async function load() {
       setLoading(true);
       try {
-        const { data: rows, error: err } = await supabase
-          .from('hs_email_metrics')
-          .select('*')
-          .gte('date', startDate)
-          .lte('date', endDate)
-          .order('date', { ascending: true });
-        if (err) throw err;
+        const rows = await fetchAllPaged('hs_email_metrics', {
+          dateField: 'date', startDate, endDate, orderField: 'date',
+        });
         if (cancelled) return;
 
         const byEmail = {};
