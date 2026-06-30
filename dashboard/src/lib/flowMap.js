@@ -249,6 +249,68 @@ export const FLOW_MAP = [
       'AS | 2026 - Onboarding D7 - Telemedicina',
     ],
   },
+
+  // ── Campanha 10 Anos (ativada em jul/2026) ───────────────────────────────
+  // hidden: true mantém o card oculto enquanto não há dados.
+  // Remover a flag quando quiser exibir, ou deixar: o card também é
+  // ocultado automaticamente enquanto estiver zerado (ver Estrategico.jsx).
+  {
+    flowId:   '10anos-mulher',
+    flowName: '10 Anos - Combo Mulher',
+    bu:       'Medicina',
+    hidden:   true,
+    emails: [
+      'AS | 2026 Combo Mulher 1 - 10 anos',
+      'AS | 2026 Combo Mulher 2 - 10 anos',
+      'AS | 2026 Combo Mulher 3 - 10 anos',
+      'AS | 2026 Combo Mulher 4 - 10 anos',
+    ],
+  },
+  {
+    flowId:   '10anos-homem',
+    flowName: '10 Anos - Combo Homem',
+    bu:       'Medicina',
+    hidden:   true,
+    emails: [
+      'AS | 2026 Combo Homem 1 - 10 anos',
+      'AS | 2026 Combo Homem 2 - 10 anos',
+      'AS | 2026 Combo Homem 3 - 10 anos',
+    ],
+  },
+  {
+    flowId:   '10anos-coracao',
+    flowName: '10 Anos - Combo Coração',
+    bu:       'Medicina',
+    hidden:   true,
+    emails: [
+      'AS | 2026 Combo Coração 1 - 10 anos',
+      'AS | 2026 Combo Coração 2 - 10 anos',
+      'AS | 2026 Combo Coração 3 - 10 anos',
+      'AS | 2026 Combo Coração 4 - 10 anos',
+    ],
+  },
+  {
+    flowId:   '10anos-idoso',
+    flowName: '10 Anos - Combo Idoso',
+    bu:       'Medicina',
+    hidden:   true,
+    emails: [
+      'AS | 2026 Combo Idoso 1 - 10 anos',
+      'AS | 2026 Combo Idoso 2 - 10 anos',
+      'AS | 2026 Combo Idoso 3 - 10 anos',
+    ],
+  },
+  {
+    flowId:   '10anos-crianca',
+    flowName: '10 Anos - Combo Criança',
+    bu:       'Medicina',
+    hidden:   true,
+    emails: [
+      'AS | 2026 Combo Criança 1 - 10 anos',
+      'AS | 2026 Combo Criança 2 - 10 anos',
+      'AS | 2026 Combo Criança 3 - 10 anos',
+    ],
+  },
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────────────
