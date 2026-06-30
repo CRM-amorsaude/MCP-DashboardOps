@@ -463,12 +463,29 @@ function EmailsTab({ porCampanha, canaisPorCampanha, emailMetrics, enrollments, 
   const sazRows      = useMemo(() => porCampanha.filter(r => !mappedEmails.has((r.nm_campanha||'').trim())), [porCampanha, mappedEmails]);
   const sazNomes     = useMemo(() => [...new Set(sazRows.map(r => (r.nm_campanha||'').trim()))], [sazRows]);
 
+  // Verifica se um fluxo já tem qualquer dado (conversão na atribuição ou envio de e-mail)
+  const flowTemDados = useMemo(() => {
+    const clean = s => (s || '').trim();
+    return (flow) => {
+      const athenaSet = new Set(getAthenaCampaigns(flow).map(clean));
+      const temConversao = porCampanha.some(r => athenaSet.has(clean(r.nm_campanha)));
+      const temEnvio = emailMetrics.some(e => flow.emails.includes(e.hs_name) && (Number(e.sent) || 0) > 0);
+      return temConversao || temEnvio;
+    };
+  }, [porCampanha, emailMetrics]);
+
+  // Fluxo aparece se não estiver oculto, OU se estiver oculto mas já tiver dados
+  const fluxosVisiveis = useMemo(
+    () => FLOW_MAP.filter(f => !f.hidden || flowTemDados(f)),
+    [flowTemDados]
+  );
+
   if (loading) return <Loading />;
 
   return (
     <>
-      <Section title="Fluxos de automação" badge={`${FLOW_MAP.length} fluxos · ${FLOW_MAP.reduce((s,f)=>s+f.emails.length,0)} e-mails`}>
-        {FLOW_MAP.map(flow => (
+      <Section title="Fluxos de automação" badge={`${fluxosVisiveis.length} fluxos · ${fluxosVisiveis.reduce((s,f)=>s+f.emails.length,0)} e-mails`}>
+        {fluxosVisiveis.map(flow => (
           <FlowCard key={flow.flowId} flow={flow} porCampanha={porCampanha} canaisPorCampanha={canaisPorCampanha} emailMetrics={emailMetrics} enrollments={enrollments} />
         ))}
       </Section>
