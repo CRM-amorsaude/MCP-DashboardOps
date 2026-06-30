@@ -374,16 +374,15 @@ function OverviewTab({ data, loading }) {
     <>
       <div style={{ display:'grid', gridTemplateColumns:'repeat(4,minmax(0,1fr))', gap:12, marginBottom:14 }}>
         <MetricCard label="Receita atribuída" value={fmtBRL(k.receita)} sub="atend + pós + odonto (e-mail + WhatsApp)" accent="var(--as-azul-apatita)" />
-        <MetricCard label="Propostas pagas"   value={fmtK(k.propostas_pagas)} sub={`TM ${fmtBRL(ticketMedio)}`} />
         <MetricCard label="Agendamentos"       value={fmtK(k.agendamentos)} sub="origem Agendamento" />
         <MetricCard label="Atendimentos"       value={fmtK(k.atendimentos)} sub="definidos como atendido" accent="var(--as-vermelho)" />
+        <MetricCard label="Valor atendimento"  value={fmtBRL(k.valor_atend)} sub="agendamento quitado" />
       </div>
       <div style={{ display:'grid', gridTemplateColumns:'repeat(4,minmax(0,1fr))', gap:12, marginBottom:20 }}>
+        <MetricCard label="Qt. Propostas"      value={fmtK(k.qt_propostas)} sub="todas origens pós" />
+        <MetricCard label="Qt. Prop. Pagas"    value={fmtK(k.qt_propostas_pagas)} sub={`pagas (e-mail + WhatsApp) · TM ${fmtBRL(ticketMedio)}`} />
         <MetricCard label="Fat. Pós Consulta"  value={fmtBRL(k.fat_pos)} sub="medicina paga (e-mail + WhatsApp)" />
         <MetricCard label="Fat. Odontologia"   value={fmtBRL(k.fat_odo)} sub="odonto (e-mail + WhatsApp)" />
-        <MetricCard label="Qt. Propostas"      value={fmtK(k.qt_propostas)} sub="todas origens pós" />
-        <MetricCard label="Qt. Prop. Pagas"    value={fmtK(k.qt_propostas_pagas)} sub="pagas (e-mail + WhatsApp)" />
-        <MetricCard label="Valor atendimento"  value={fmtBRL(k.valor_atend)} sub="agendamento quitado" />
       </div>
 
       <div style={{ display:'grid', gridTemplateColumns:'minmax(0,1.4fr) minmax(0,1fr)', gap:14, marginBottom:20 }}>
