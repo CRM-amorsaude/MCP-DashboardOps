@@ -338,15 +338,33 @@ function FlowCard({ flow, porCampanha, canaisPorCampanha, emailMetrics, enrollme
 
 // ── Overview tab ──────────────────────────────────────────────────────────
 function OverviewTab({ data, loading }) {
-  const { porCampanha, canais: canaisRaw, especialidades, convenios: convRaw, fatMes } = data;
-  const m        = useMemo(() => sumCampanhas(porCampanha), [porCampanha]);
+  const { porCampanha, canais: canaisRaw, especialidades, convenios: convRaw, fatMes, kpis } = data;
   const esps     = useMemo(() => especialidadesToList(especialidades).slice(0, 10), [especialidades]);
   const top      = useMemo(() => topCampanhas(porCampanha, 8), [porCampanha]);
   const canais   = useMemo(() => canaisToBars(canaisRaw), [canaisRaw]);
   const fatM     = useMemo(() => fatMesToSeries(fatMes), [fatMes]);
   const convenios = useMemo(() => conveniosToBars(convRaw, 4), [convRaw]);
 
-  const txAg  = m.fat_total > 0 && m.agendamentos > 0 ? ((m.agendamentos / (m.propostas_pagas||1)) * 100).toFixed(1) : '—';
+  // KPIs consolidados (e-mail + cVortex) vêm da rpc_estrategico_kpis.
+  // Fallback para soma das campanhas (só e-mail) se a RPC não retornar.
+  const fb = useMemo(() => sumCampanhas(porCampanha), [porCampanha]);
+  const k = kpis ? {
+    receita:        Number(kpis.receita_atribuida) || 0,
+    propostas_pagas: Number(kpis.propostas_pagas) || 0,
+    agendamentos:   Number(kpis.agendamentos) || 0,
+    atendimentos:   Number(kpis.atendimentos) || 0,
+    fat_pos:        Number(kpis.fat_pos) || 0,
+    fat_odo:        Number(kpis.fat_odo) || 0,
+    qt_propostas:   Number(kpis.qt_propostas) || 0,
+    qt_propostas_pagas: Number(kpis.qt_propostas_pagas) || 0,
+    valor_atend:    Number(kpis.valor_atend) || 0,
+  } : {
+    receita: fb.fat_total, propostas_pagas: fb.propostas_pagas,
+    agendamentos: fb.agendamentos, atendimentos: fb.atendimentos,
+    fat_pos: fb.fat_pos, fat_odo: fb.fat_odo, qt_propostas: fb.qt_propostas,
+    qt_propostas_pagas: fb.qt_propostas_pagas, valor_atend: fb.valor_atend,
+  };
+  const ticketMedio = k.propostas_pagas > 0 ? k.receita / k.propostas_pagas : 0;
 
   const CANAL_PIE_COLORS = ['#61C1D0','#0C223C','#E8A33A','#A8B3BF','#D73834'];
 
@@ -355,17 +373,17 @@ function OverviewTab({ data, loading }) {
   return (
     <>
       <div style={{ display:'grid', gridTemplateColumns:'repeat(4,minmax(0,1fr))', gap:12, marginBottom:14 }}>
-        <MetricCard label="Receita atribuída" value={fmtBRL(m.fat_total)} sub="status: Quitadas + Efetivado" accent="var(--as-azul-apatita)" />
-        <MetricCard label="Propostas pagas"   value={fmtK(m.propostas_pagas)} sub={`TM ${fmtBRL(m.ticket_medio)}`} />
-        <MetricCard label="Agendamentos"       value={fmtK(m.agendamentos)} sub="origem Agendamento" />
-        <MetricCard label="Atendimentos"       value={fmtK(m.atendimentos)} sub="pós consulta medicina" accent="var(--as-vermelho)" />
+        <MetricCard label="Receita atribuída" value={fmtBRL(k.receita)} sub="atend + pós + odonto (e-mail + WhatsApp)" accent="var(--as-azul-apatita)" />
+        <MetricCard label="Propostas pagas"   value={fmtK(k.propostas_pagas)} sub={`TM ${fmtBRL(ticketMedio)}`} />
+        <MetricCard label="Agendamentos"       value={fmtK(k.agendamentos)} sub="origem Agendamento" />
+        <MetricCard label="Atendimentos"       value={fmtK(k.atendimentos)} sub="definidos como atendido" accent="var(--as-vermelho)" />
       </div>
       <div style={{ display:'grid', gridTemplateColumns:'repeat(4,minmax(0,1fr))', gap:12, marginBottom:20 }}>
-        <MetricCard label="Fat. Pós Consulta"  value={fmtBRL(m.fat_pos)} sub="medicina paga" />
-        <MetricCard label="Fat. Odontologia"   value={fmtBRL(m.fat_odo)} sub="Webdental + Webvidas" />
-        <MetricCard label="Qt. Propostas"      value={fmtK(m.qt_propostas)} sub="todas origens pós" />
-        <MetricCard label="Qt. Prop. Pagas"    value={fmtK(m.qt_propostas_pagas)} sub="Quitadas + Executada" />
-        <MetricCard label="Valor atendimento"  value={fmtBRL(m.valor_atend)} sub="agendamento quitado" />
+        <MetricCard label="Fat. Pós Consulta"  value={fmtBRL(k.fat_pos)} sub="medicina paga (e-mail + WhatsApp)" />
+        <MetricCard label="Fat. Odontologia"   value={fmtBRL(k.fat_odo)} sub="odonto (e-mail + WhatsApp)" />
+        <MetricCard label="Qt. Propostas"      value={fmtK(k.qt_propostas)} sub="todas origens pós" />
+        <MetricCard label="Qt. Prop. Pagas"    value={fmtK(k.qt_propostas_pagas)} sub="pagas (e-mail + WhatsApp)" />
+        <MetricCard label="Valor atendimento"  value={fmtBRL(k.valor_atend)} sub="agendamento quitado" />
       </div>
 
       <div style={{ display:'grid', gridTemplateColumns:'minmax(0,1.4fr) minmax(0,1fr)', gap:14, marginBottom:20 }}>
